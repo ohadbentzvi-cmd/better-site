@@ -1,0 +1,28 @@
+# BetterSite API (FastAPI) — dependencies
+# The pipeline/ models and utils are imported from the sibling directory.
+
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.29,<1.0
+pydantic>=2.6,<3.0
+pydantic-settings>=2.2,<3.0
+
+# DB — share models with pipeline/
+sqlalchemy[asyncio]>=2.0,<3.0
+psycopg[binary]>=3.1,<4.0
+
+# Auth / security
+python-multipart>=0.0.9,<1.0
+
+# Stripe webhooks
+stripe>=8.6,<9.0
+
+# Logging + monitoring
+structlog>=24.1,<25.0
+sentry-sdk[fastapi]>=1.45,<2.0
+
+# HTML sanitization (for content rendered server-side inside preview API responses)
+bleach>=6.1,<7.0
+
+# Dev
+pytest>=8.1,<9.0
+httpx>=0.27,<1.0  # test client

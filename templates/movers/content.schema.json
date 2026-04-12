@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MoversTemplateContent",
+  "description": "Content contract for the movers vertical template. Every field is optional — the template must degrade gracefully when fields are missing.",
+  "type": "object",
+  "properties": {
+    "business_name": { "type": "string" },
+    "tagline": { "type": "string" },
+    "about": { "type": "string" },
+    "services": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "phone": { "type": "string" },
+    "email": { "type": "string" },
+    "address": { "type": "string" },
+    "social_links": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "logo_url": { "type": "string" },
+    "hero_url": { "type": "string" },
+    "brand_colors": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of hex color strings, e.g. ['#C41E3A', '#FFFFFF']"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,30 @@
+[project]
+name = "bettersite-pipeline"
+version = "0.0.2"
+description = "BetterSite agent pipeline: Lead Generator, Scanner, Extractor, Builder, Sales Agent"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "SIM", "RET", "ARG"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true  # for libs without stubs (colorthief, etc.)
+
+[tool.pytest.ini_options]
+testpaths = ["../tests"]
+pythonpath = [".", ".."]
+asyncio_mode = "auto"
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:prefect.*",
+]

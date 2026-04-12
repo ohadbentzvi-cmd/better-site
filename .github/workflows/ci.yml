@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pipeline-and-api:
+    name: Python (pipeline + api)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install pipeline deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r pipeline/requirements.txt
+          pip install -r api/requirements.txt
+
+      - name: Lint (ruff)
+        run: ruff check pipeline api tests
+
+      - name: Type check (mypy)
+        run: mypy pipeline api || true  # allow failures during scaffolding phase
+
+      - name: Test
+        env:
+          # Placeholder values so pydantic-settings doesn't fail to load
+          APP_BASE_URL: http://localhost
+          APP_SECRET_KEY: test-secret
+          DATABASE_URL: postgresql+psycopg://test:test@localhost/test
+          PREFECT_API_URL: http://localhost
+          PREFECT_API_KEY: test
+          R2_ACCOUNT_ID: test
+          R2_ACCESS_KEY_ID: test
+          R2_SECRET_ACCESS_KEY: test
+          R2_ENDPOINT: http://localhost
+          R2_PUBLIC_BASE_URL: http://localhost
+          ANTHROPIC_API_KEY: test
+          GOOGLE_MAPS_API_KEY: test
+          HUNTER_API_KEY: test
+          ZEROBOUNCE_API_KEY: test
+          STRIPE_PUBLISHABLE_KEY: pk_test_x
+          STRIPE_SECRET_KEY: sk_test_x
+          STRIPE_WEBHOOK_SECRET: whsec_x
+          STRIPE_PRICE_ID: price_x
+          ADMIN_BASIC_AUTH_USER: admin
+          ADMIN_BASIC_AUTH_PASSWORD: password
+        run: pytest tests/unit -v
+
+  web:
+    name: Next.js (web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package.json
+
+      - name: Install
+        working-directory: web
+        run: npm install --package-lock-only && npm ci || npm install
+
+      - name: Typecheck
+        working-directory: web
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: web
+        run: npm run lint || true  # allow failures during scaffolding phase
+
+      - name: Build
+        working-directory: web
+        env:
+          NEXT_PUBLIC_APP_BASE_URL: http://localhost
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_x
+          ADMIN_BASIC_AUTH_USER: admin
+          ADMIN_BASIC_AUTH_PASSWORD: password
+        run: npm run build
