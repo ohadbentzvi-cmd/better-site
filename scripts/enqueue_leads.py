@@ -1,31 +1,47 @@
-"""Cold-email channel entrypoint — enqueue leads into the pipeline.
+"""Trigger a one-off ``lead-generation`` flow run.
 
-The POC has no public self-serve surface, so leads enter the pipeline via
-this script. Called manually or on a cron.
+Useful while scheduled flows aren't live yet. Invokes the flow directly
+in-process against the configured Prefect server.
 
-Usage:
-    python scripts/enqueue_leads.py --vertical movers --city "Austin, TX" --country US --limit 100
-
-Phase 2 implementation TODO.
+    python -m scripts.enqueue_leads --source bbb --vertical movers \\
+        --state TX --city Houston [--max-pages 5]
 """
 
 from __future__ import annotations
 
 import argparse
-import sys
+import asyncio
+
+from pipeline.flows.lead_generator import generate_leads
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Enqueue leads into the BetterSite pipeline")
-    parser.add_argument("--vertical", required=True, help="Industry vertical (e.g. movers)")
-    parser.add_argument("--city", required=True, help='City name (e.g. "Austin, TX")')
-    parser.add_argument("--country", required=True, help="ISO alpha-2 country code")
-    parser.add_argument("--limit", type=int, default=100, help="Max leads to enqueue")
-    args = parser.parse_args()
+def _parse_args() -> argparse.Namespace:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--source", default="bbb", help="Registered lead source (default: bbb)")
+    ap.add_argument("--vertical", default="movers", help="Internal vertical tag (default: movers)")
+    ap.add_argument("--state", required=True, help="ISO 3166-2 subdivision, e.g. TX")
+    ap.add_argument("--city", required=True, help="City name, e.g. Houston")
+    ap.add_argument(
+        "--max-pages",
+        type=int,
+        default=None,
+        help="Optional cap on search-result pages (default: walk until empty)",
+    )
+    return ap.parse_args()
 
-    print(f"[TODO] would enqueue {args.limit} {args.vertical} leads in {args.city}, {args.country}")
-    return 0
+
+async def _main() -> None:
+    args = _parse_args()
+    summary = await generate_leads(
+        source=args.source,
+        vertical=args.vertical,
+        state=args.state,
+        city=args.city,
+        max_pages=args.max_pages,
+    )
+    for k, v in summary.items():
+        print(f"{k:<32} {v}")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    asyncio.run(_main())

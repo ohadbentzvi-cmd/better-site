@@ -18,8 +18,10 @@ import enum
 import uuid
 from typing import TYPE_CHECKING
 
+from typing import Any
+
 from sqlalchemy import Enum, Index, String
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pipeline.models.base import OPS_SCHEMA, Base, TimestampMixin
@@ -75,10 +77,15 @@ class Lead(Base, TimestampMixin):
 
     # Geography
     city: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(8), nullable=True)  # ISO 3166-2 subdivision
     country: Mapped[str] = mapped_column(String(8), nullable=False, index=True)  # ISO alpha-2
 
     # Provenance
-    source: Mapped[str] = mapped_column(String(64), nullable=False)  # e.g. "google_maps"
+    source: Mapped[str] = mapped_column(String(64), nullable=False)  # e.g. "bbb"
+    source_metadata: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    email_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     # Pipeline state
     status: Mapped[LeadStatus] = mapped_column(

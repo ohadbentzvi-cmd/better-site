@@ -1,77 +1,55 @@
 """Lead Generator flow.
 
-Phase 1 demo: UPSERTs a single synthetic lead into ``ops.leads`` to prove
-end-to-end DB connectivity from the Railway worker.
-
-Phase 2 will replace the body with Google Maps Places → canonicalize →
-Hunter.io → dedupe → UPSERT. The UPSERT pattern here is the one every
-agent will use — ``INSERT ... ON CONFLICT DO UPDATE`` keyed on
-``canonical_domain`` so Prefect retries are safe.
+Source-pluggable Prefect flow. Today ``source="bbb"`` is the only
+registered value; FMCSA / Google Maps plug in later via
+``pipeline.agents.lead_generator.sources``.
 """
 
 from __future__ import annotations
 
 import structlog
 from prefect import flow
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from pipeline.db import session_scope
-from pipeline.models import Lead, LeadStatus
+from pipeline.agents.lead_generator.pipeline import LeadGenSummary, run_source
+from pipeline.agents.lead_generator.sources import get_source
 
 log = structlog.get_logger(__name__)
 
 
 @flow(name="lead-generation")
-def generate_leads(
+async def generate_leads(
+    source: str = "bbb",
     vertical: str = "movers",
-    city: str = "Austin",
-    country: str = "US",
-    limit: int = 10,
-) -> int:
-    """UPSERT one demo lead. Returns the number of rows touched (always 1)."""
+    state: str = "TX",
+    city: str = "Houston",
+    max_pages: int | None = None,
+) -> dict[str, int]:
+    """Ingest leads from ``source`` for (vertical, state, city).
+
+    Returns the ``LeadGenSummary`` as a plain dict so Prefect can persist
+    it as the run result.
+    """
     log.info(
         "lead_generation_start",
+        source=source,
         vertical=vertical,
+        state=state,
         city=city,
-        country=country,
-        limit=limit,
+        max_pages=max_pages,
     )
 
-    # Deterministic canonical_domain so re-running the flow UPSERTs the same row.
-    canonical = f"demo-{vertical}-{city.lower()}.example"
-    values = {
-        "business_name": f"Demo {vertical.title()} of {city}",
-        "vertical": vertical,
-        "website_url": f"https://{canonical}",
-        "canonical_domain": canonical,
-        "email": f"hello@{canonical}",
-        "city": city,
-        "country": country,
-        "source": "demo",
-        "status": LeadStatus.new,
-    }
-
-    stmt = pg_insert(Lead).values(**values)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["canonical_domain"],
-        set_={
-            "business_name": stmt.excluded.business_name,
-            "vertical": stmt.excluded.vertical,
-            "website_url": stmt.excluded.website_url,
-            "email": stmt.excluded.email,
-            "city": stmt.excluded.city,
-            "country": stmt.excluded.country,
-            "source": stmt.excluded.source,
-        },
+    lead_source = get_source(source)
+    summary: LeadGenSummary = await run_source(
+        lead_source,
+        vertical=vertical,
+        state=state,
+        city=city,
+        max_pages=max_pages,
     )
-
-    with session_scope() as session:
-        session.execute(stmt)
-        session.commit()
-
-    log.info("lead_generation_upserted", canonical_domain=canonical)
-    return 1
+    return summary.as_dict()
 
 
 if __name__ == "__main__":
-    generate_leads()
+    import asyncio
+
+    asyncio.run(generate_leads())
