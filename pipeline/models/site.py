@@ -15,7 +15,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, UniqueConstrai
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from pipeline.models.base import Base, TimestampMixin
+from pipeline.models.base import APP_SCHEMA, Base, TimestampMixin
 
 if TYPE_CHECKING:
     from pipeline.models.lead import Lead
@@ -37,7 +37,7 @@ class Site(Base, TimestampMixin):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     lead_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("leads.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("ops.leads.id", ondelete="CASCADE"), nullable=False
     )
 
     # Unguessable slug (nanoid(12)) used in the preview URL
@@ -47,7 +47,7 @@ class Site(Base, TimestampMixin):
     preview_url: Mapped[str] = mapped_column(String(1024), nullable=False)
 
     status: Mapped[SiteStatus] = mapped_column(
-        Enum(SiteStatus, name="site_status"),
+        Enum(SiteStatus, name="site_status", schema=APP_SCHEMA),
         nullable=False,
         default=SiteStatus.draft,
         index=True,
@@ -65,4 +65,5 @@ class Site(Base, TimestampMixin):
             "expires_at",
             postgresql_where="expires_at IS NOT NULL",
         ),
+        {"schema": APP_SCHEMA},
     )

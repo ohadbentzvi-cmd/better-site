@@ -1,7 +1,13 @@
 """Typed settings loaded from environment variables.
 
-Every env var listed in `.env.example` should have a corresponding field here.
-Pydantic validates at import time, so a missing required var fails loudly.
+Phase-gated: only fields the current codepath actually uses are required.
+Everything else is optional with an empty default. When a feature lands that
+needs a given var, either promote it to required here or have the feature
+validate it at call time.
+
+Required today (Phase 1 worker):
+    DATABASE_URL   — app DB (ops.* / app.*)
+    PREFECT_API_URL — Prefect server REST API
 """
 
 from __future__ import annotations
@@ -9,7 +15,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,60 +27,66 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Application
-    APP_ENV: Literal["staging", "production", "local"] = "staging"
-    APP_BASE_URL: str
-    APP_SECRET_KEY: str
-
-    # Database
+    # ── Required (Phase 1) ───────────────────────────────────────────────────
     DATABASE_URL: str
-
-    # Prefect
     PREFECT_API_URL: str
-    PREFECT_API_KEY: str
 
-    # Cloudflare R2
-    R2_ACCOUNT_ID: str
-    R2_ACCESS_KEY_ID: str
-    R2_SECRET_ACCESS_KEY: str
+    # ── Optional (auth not configured on self-hosted Prefect server) ─────────
+    PREFECT_API_KEY: str = ""
+
+    # ── Optional until their feature ships ───────────────────────────────────
+    APP_ENV: Literal["staging", "production", "local"] = "staging"
+    APP_BASE_URL: str = ""
+    APP_SECRET_KEY: str = ""
+
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
     R2_BUCKET_NAME: str = "bettersite-assets"
-    R2_ENDPOINT: str
-    R2_PUBLIC_BASE_URL: str
+    R2_ENDPOINT: str = ""
+    R2_PUBLIC_BASE_URL: str = ""
 
-    # Anthropic
-    ANTHROPIC_API_KEY: str
+    ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
     CLAUDE_COST_CEILING_PER_BATCH_USD: float = 20.0
 
-    # Data sources
-    GOOGLE_MAPS_API_KEY: str
-    HUNTER_API_KEY: str
-    ZEROBOUNCE_API_KEY: str
+    GOOGLE_MAPS_API_KEY: str = ""
+    HUNTER_API_KEY: str = ""
+    ZEROBOUNCE_API_KEY: str = ""
     PAGESPEED_API_KEY: str = ""
 
-    # Stripe
-    STRIPE_PUBLISHABLE_KEY: str
-    STRIPE_SECRET_KEY: str
-    STRIPE_WEBHOOK_SECRET: str
-    STRIPE_PRICE_ID: str
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_PRICE_ID: str = ""
 
-    # Sentry
     SENTRY_DSN: str = ""
 
-    # Admin auth
-    ADMIN_BASIC_AUTH_USER: str
-    ADMIN_BASIC_AUTH_PASSWORD: str
+    ADMIN_BASIC_AUTH_USER: str = ""
+    ADMIN_BASIC_AUTH_PASSWORD: str = ""
 
-    # Strategy selectors
     EXTRACTION_STRATEGY: Literal["html_only", "vision_full", "hybrid", "gmb_first"] = "html_only"
     SALES_AGENT_BACKEND: Literal[
         "null", "console", "smartlead", "instantly", "smtp", "postmark"
     ] = "null"
 
-    # Tuning knobs
     SCANNER_PASS_THRESHOLD: int = Field(default=60, ge=0, le=100)
     PREVIEW_EXPIRY_HOURS: int = Field(default=48, ge=1)
     FOLLOWUP_DELAY_HOURS: int = Field(default=24, ge=1)
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _force_psycopg_v3(cls, v: str) -> str:
+        # Railway + Supabase hand out bare postgresql:// URLs. SQLAlchemy's
+        # default driver for that scheme is psycopg2 — we use psycopg v3.
+        # Normalize both common prefixes so callers don't need to think about it.
+        if v.startswith("postgresql+"):
+            return v
+        if v.startswith("postgresql://"):
+            return "postgresql+psycopg://" + v[len("postgresql://") :]
+        if v.startswith("postgres://"):
+            return "postgresql+psycopg://" + v[len("postgres://") :]
+        return v
 
 
 @lru_cache(maxsize=1)

@@ -11,7 +11,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from pipeline.models.base import Base, TimestampMixin
+from pipeline.models.base import OPS_SCHEMA, Base, TimestampMixin
 
 if TYPE_CHECKING:
     from pipeline.models.lead import Lead
@@ -37,7 +37,7 @@ class Email(Base, TimestampMixin):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     lead_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("leads.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("ops.leads.id", ondelete="CASCADE"), nullable=False
     )
 
     # Which send in the sequence: 1 = initial, 2 = follow-up
@@ -51,7 +51,7 @@ class Email(Base, TimestampMixin):
     clicked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     status: Mapped[EmailStatus] = mapped_column(
-        Enum(EmailStatus, name="email_status"),
+        Enum(EmailStatus, name="email_status", schema=OPS_SCHEMA),
         nullable=False,
         default=EmailStatus.queued,
     )
@@ -65,4 +65,5 @@ class Email(Base, TimestampMixin):
     __table_args__ = (
         Index("idx_emails_lead_id_step", "lead_id", "sequence_step"),
         Index("idx_emails_status_sent_at", "status", "sent_at"),
+        {"schema": OPS_SCHEMA},
     )

@@ -12,7 +12,7 @@ from sqlalchemy import ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from pipeline.models.base import Base, TimestampMixin
+from pipeline.models.base import OPS_SCHEMA, Base, TimestampMixin
 
 if TYPE_CHECKING:
     from pipeline.models.lead import Lead
@@ -25,7 +25,7 @@ class Extraction(Base, TimestampMixin):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     lead_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("leads.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("ops.leads.id", ondelete="CASCADE"), nullable=False
     )
 
     # Strategy used to produce this extraction (html_only, vision_full, hybrid, gmb_first)
@@ -47,4 +47,5 @@ class Extraction(Base, TimestampMixin):
 
     __table_args__ = (
         UniqueConstraint("lead_id", name="uq_extractions_lead_id"),
+        {"schema": OPS_SCHEMA},
     )

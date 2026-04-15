@@ -22,7 +22,7 @@ from sqlalchemy import Enum, Index, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from pipeline.models.base import Base, TimestampMixin
+from pipeline.models.base import OPS_SCHEMA, Base, TimestampMixin
 
 if TYPE_CHECKING:
     from pipeline.models.email import Email
@@ -82,7 +82,7 @@ class Lead(Base, TimestampMixin):
 
     # Pipeline state
     status: Mapped[LeadStatus] = mapped_column(
-        Enum(LeadStatus, name="lead_status"),
+        Enum(LeadStatus, name="lead_status", schema=OPS_SCHEMA),
         nullable=False,
         default=LeadStatus.new,
         index=True,
@@ -98,4 +98,5 @@ class Lead(Base, TimestampMixin):
 
     __table_args__ = (
         Index("idx_leads_vertical_country", "vertical", "country"),
+        {"schema": OPS_SCHEMA},
     )

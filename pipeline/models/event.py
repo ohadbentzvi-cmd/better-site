@@ -9,7 +9,7 @@ from sqlalchemy import ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from pipeline.models.base import Base, TimestampMixin
+from pipeline.models.base import OPS_SCHEMA, Base, TimestampMixin
 
 if TYPE_CHECKING:
     from pipeline.models.lead import Lead
@@ -22,7 +22,7 @@ class Event(Base, TimestampMixin):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     lead_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("leads.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("ops.leads.id", ondelete="CASCADE"), nullable=False
     )
 
     # e.g. "lead_generator.start", "scanner.complete", "extractor.claude_vision.error"
@@ -36,4 +36,5 @@ class Event(Base, TimestampMixin):
     __table_args__ = (
         Index("idx_events_lead_id_created", "lead_id", "created_at"),
         Index("idx_events_type", "event_type"),
+        {"schema": OPS_SCHEMA},
     )

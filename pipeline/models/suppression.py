@@ -9,7 +9,7 @@ from sqlalchemy import Enum, Index, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from pipeline.models.base import Base, TimestampMixin
+from pipeline.models.base import OPS_SCHEMA, Base, TimestampMixin
 
 
 class SuppressionReason(str, enum.Enum):
@@ -33,11 +33,12 @@ class SuppressionEntry(Base, TimestampMixin):
     domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     reason: Mapped[SuppressionReason] = mapped_column(
-        Enum(SuppressionReason, name="suppression_reason"),
+        Enum(SuppressionReason, name="suppression_reason", schema=OPS_SCHEMA),
         nullable=False,
     )
 
     __table_args__ = (
         Index("idx_suppression_email", "email", unique=True, postgresql_where="email IS NOT NULL"),
         Index("idx_suppression_domain", "domain"),
+        {"schema": OPS_SCHEMA},
     )

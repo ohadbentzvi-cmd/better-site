@@ -9,7 +9,7 @@ from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from pipeline.models.base import Base, TimestampMixin
+from pipeline.models.base import OPS_SCHEMA, Base, TimestampMixin
 
 if TYPE_CHECKING:
     from pipeline.models.lead import Lead
@@ -22,7 +22,7 @@ class Scan(Base, TimestampMixin):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     lead_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("leads.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("ops.leads.id", ondelete="CASCADE"), nullable=False
     )
 
     # Overall
@@ -47,4 +47,5 @@ class Scan(Base, TimestampMixin):
     __table_args__ = (
         # One scan per lead — allows idempotent UPSERT by lead_id
         UniqueConstraint("lead_id", name="uq_scans_lead_id"),
+        {"schema": OPS_SCHEMA},
     )

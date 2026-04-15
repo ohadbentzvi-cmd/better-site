@@ -26,6 +26,20 @@ config.set_main_option("sqlalchemy.url", get_settings().DATABASE_URL)
 
 target_metadata = Base.metadata
 
+# Only manage schemas we own. Without this filter, include_schemas=True would
+# cause autogenerate to try to drop public / information_schema / pg_catalog.
+_MANAGED_SCHEMAS = {"ops", "app"}
+
+
+def _include_name(name: str | None, type_: str, parent_names: dict[str, str | None]) -> bool:
+    if type_ == "schema":
+        return name in _MANAGED_SCHEMAS
+    # For tables / indexes / constraints, Alembic passes the schema via parent_names.
+    schema = parent_names.get("schema_name")
+    if schema is None:
+        return True
+    return schema in _MANAGED_SCHEMAS
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode — emits SQL without a live DB."""
@@ -35,6 +49,10 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_schemas=True,
+        include_name=_include_name,
+        compare_type=True,
+        compare_server_default=True,
     )
 
     with context.begin_transaction():
@@ -50,7 +68,14 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_schemas=True,
+            include_name=_include_name,
+            compare_type=True,
+            compare_server_default=True,
+        )
         with context.begin_transaction():
             context.run_migrations()
 
