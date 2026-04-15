@@ -48,6 +48,13 @@ def _full_browser() -> BrowserCheckResult:
         image_count=10,
         images_with_alt=9,
         json_ld_types=["LocalBusiness"],
+        phone_above_fold=True,
+        phone_text="(713) 555-0192",
+        cta_above_fold=True,
+        cta_text="Get a Quote",
+        has_contact_form=True,
+        copyright_year=2026,
+        has_reviews_or_testimonials=True,
     )
 
 
@@ -203,3 +210,132 @@ class TestBrowserUnavailable:
         assert result["score_ai_readiness"] is None
         assert result["scan_partial"] is True
         assert result["overall"] is None
+
+
+class TestConversionFindings:
+    def _browser_conversion(
+        self,
+        *,
+        phone_above_fold: bool = True,
+        cta_above_fold: bool = True,
+        has_contact_form: bool = True,
+        copyright_year: int | None = 2026,
+        has_reviews: bool = True,
+    ) -> BrowserCheckResult:
+        b = _full_browser()
+        b.phone_above_fold = phone_above_fold
+        b.cta_above_fold = cta_above_fold
+        b.has_contact_form = has_contact_form
+        b.copyright_year = copyright_year
+        b.has_reviews_or_testimonials = has_reviews
+        return b
+
+    def _findings_by_category(self, result: dict, cat: str) -> list:
+        return [f for f in result["findings"] if f.category == cat]
+
+    def test_all_conversion_signals_present_no_findings(self) -> None:
+        result = score_scan(
+            PageSpeedData(mobile=_perf(80), available=True),
+            self._browser_conversion(),
+            _full_http(),
+        )
+        assert self._findings_by_category(result, "conversion") == []
+
+    def test_missing_phone_above_fold_fires_high(self) -> None:
+        result = score_scan(
+            PageSpeedData(mobile=_perf(80), available=True),
+            self._browser_conversion(phone_above_fold=False),
+            _full_http(),
+        )
+        conv = self._findings_by_category(result, "conversion")
+        assert len(conv) == 1
+        assert conv[0].severity == "high"
+        assert "phone" in conv[0].smb_message.lower()
+
+    def test_missing_cta_above_fold_fires_high(self) -> None:
+        result = score_scan(
+            PageSpeedData(mobile=_perf(80), available=True),
+            self._browser_conversion(cta_above_fold=False),
+            _full_http(),
+        )
+        conv = self._findings_by_category(result, "conversion")
+        assert len(conv) == 1
+        assert conv[0].severity == "high"
+
+    def test_missing_contact_form_fires_medium(self) -> None:
+        result = score_scan(
+            PageSpeedData(mobile=_perf(80), available=True),
+            self._browser_conversion(has_contact_form=False),
+            _full_http(),
+        )
+        conv = self._findings_by_category(result, "conversion")
+        assert conv[0].severity == "medium"
+
+    def test_stale_copyright_fires(self) -> None:
+        result = score_scan(
+            PageSpeedData(mobile=_perf(80), available=True),
+            self._browser_conversion(copyright_year=2019),
+            _full_http(),
+        )
+        conv = self._findings_by_category(result, "conversion")
+        msgs = [f.smb_message for f in conv]
+        assert any("2019" in m for m in msgs)
+
+    def test_recent_copyright_does_not_fire(self) -> None:
+        result = score_scan(
+            PageSpeedData(mobile=_perf(80), available=True),
+            self._browser_conversion(copyright_year=2026),
+            _full_http(),
+        )
+        conv = self._findings_by_category(result, "conversion")
+        assert not any("copyright" in f.technical_detail.lower() for f in conv)
+
+    def test_missing_copyright_is_not_a_finding(self) -> None:
+        # No copyright found at all → no claim to make. Don't emit a finding
+        # (would be too noisy: many legitimate sites omit copyright footers).
+        result = score_scan(
+            PageSpeedData(mobile=_perf(80), available=True),
+            self._browser_conversion(copyright_year=None),
+            _full_http(),
+        )
+        conv = self._findings_by_category(result, "conversion")
+        assert not any("copyright" in f.technical_detail.lower() for f in conv)
+
+    def test_no_reviews_fires(self) -> None:
+        result = score_scan(
+            PageSpeedData(mobile=_perf(80), available=True),
+            self._browser_conversion(has_reviews=False),
+            _full_http(),
+        )
+        conv = self._findings_by_category(result, "conversion")
+        assert conv and "review" in conv[0].smb_message.lower()
+
+    def test_conversion_findings_dont_affect_overall(self) -> None:
+        # Conversion findings are emitted but don't change dimension scores.
+        with_issues = score_scan(
+            PageSpeedData(mobile=_perf(80), available=True),
+            self._browser_conversion(
+                phone_above_fold=False,
+                cta_above_fold=False,
+                has_contact_form=False,
+                has_reviews=False,
+            ),
+            _full_http(),
+        )
+        clean = score_scan(
+            PageSpeedData(mobile=_perf(80), available=True),
+            self._browser_conversion(),
+            _full_http(),
+        )
+        assert with_issues["overall"] == clean["overall"]
+        assert with_issues["score_seo"] == clean["score_seo"]
+        assert with_issues["score_ai_readiness"] == clean["score_ai_readiness"]
+
+    def test_browser_unavailable_emits_no_conversion_findings(self) -> None:
+        result = score_scan(
+            PageSpeedData(mobile=_perf(80), available=True),
+            BrowserCheckResult(available=False, error_reason="timeout"),
+            _full_http(),
+        )
+        conv = self._findings_by_category(result, "conversion")
+        assert conv == []

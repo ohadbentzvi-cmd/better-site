@@ -18,6 +18,7 @@ Weights (locked per decisions from CEO + eng review):
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from pipeline.agents.scanner.base import (
@@ -61,6 +62,7 @@ def score_scan(
     seo_score = _score_seo(pagespeed, browser, http, findings)
     ai_score = _score_ai(browser, http, findings)
     sec_score = _score_security(http, findings)
+    _emit_conversion_findings(browser, findings)
 
     dims = {
         "score_performance": perf_score,
@@ -373,6 +375,85 @@ def _score_security(http: HttpCheckResult, findings: list[Finding]) -> int | Non
         ))
 
     return points
+
+
+# ── Conversion findings ─────────────────────────────────────────────────────
+#
+# Conversion is deliberately NOT a scored dimension — a scalar "Conversion: 42"
+# is weaker than specific observations. The Sales Agent reads these findings
+# and drops their SMB messages into cold-email copy. Each rule is cheap to
+# compute from the single Playwright session.
+
+COPYRIGHT_YEAR_STALE_THRESHOLD = 2  # years behind current
+
+
+def _emit_conversion_findings(
+    browser: BrowserCheckResult, findings: list[Finding]
+) -> None:
+    if not browser.available:
+        return
+
+    # 1. Phone visible above the fold.
+    if not browser.phone_above_fold:
+        findings.append(Finding(
+            category="conversion", severity="high",
+            smb_message=(
+                "Your phone number isn't visible in the first screen visitors see. "
+                "For local services, most bookings happen by phone call."
+            ),
+            technical_detail="no tel: link or phone number detected in the top viewport",
+        ))
+
+    # 2. CTA above the fold.
+    if not browser.cta_above_fold:
+        findings.append(Finding(
+            category="conversion", severity="high",
+            smb_message=(
+                "Nothing on your homepage tells visitors what to do next in the first "
+                "screen. No 'Get a Quote', no 'Call Now', no 'Book' button where they "
+                "can see it."
+            ),
+            technical_detail="no CTA-ish button or link in the top viewport",
+        ))
+
+    # 3. Contact form anywhere on the site.
+    if not browser.has_contact_form:
+        findings.append(Finding(
+            category="conversion", severity="medium",
+            smb_message=(
+                "Your site has no contact form — every inquiry routes through email "
+                "or phone instead of a visitor typing and clicking once."
+            ),
+            technical_detail="no <form> with text/email/tel/textarea inputs found",
+        ))
+
+    # 4. Copyright year stale (or missing).
+    current_year = datetime.now(tz=timezone.utc).year
+    if browser.copyright_year is not None:
+        years_behind = current_year - browser.copyright_year
+        if years_behind >= COPYRIGHT_YEAR_STALE_THRESHOLD:
+            findings.append(Finding(
+                category="conversion", severity="medium",
+                smb_message=(
+                    f"Your site's copyright says © {browser.copyright_year} — "
+                    "new visitors start to wonder if you're still in business."
+                ),
+                technical_detail=f"footer copyright year = {browser.copyright_year} ({years_behind} years behind)",
+            ))
+
+    # 5. Reviews / testimonials visible.
+    if not browser.has_reviews_or_testimonials:
+        findings.append(Finding(
+            category="conversion", severity="medium",
+            smb_message=(
+                "No reviews or testimonials on your homepage. Visitors comparing "
+                "you against the next result on Google have no reason to pick you."
+            ),
+            technical_detail=(
+                "no JSON-LD Review/AggregateRating, no testimonial keywords, "
+                "no star-rating text on page"
+            ),
+        ))
 
 
 __all__ = ["score_scan", "PASS_FAIL_THRESHOLD"]

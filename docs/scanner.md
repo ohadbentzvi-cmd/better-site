@@ -51,6 +51,21 @@ How the Scanner works and how to add new inputs or scoring rules.
 
 ---
 
+## Conversion findings (no dimension score)
+
+Orthogonal to the four dimensions. Six heuristics fire off the single Playwright session and produce `Finding(category="conversion")` entries in `issues_json` — designed as email-ready copy the Sales Agent can drop straight into cold emails.
+
+- **Phone above the fold** — `tel:` link or phone regex in header/nav within first 900px.
+- **CTA above the fold** — button/link with "quote / book / call / contact / schedule" language within first 900px.
+- **Contact form anywhere** — any `<form>` with text/email/tel/textarea inputs.
+- **Copyright year** — max 4-digit year in visible page text. Fires as "stale" when ≥2 years behind current year.
+- **Reviews / testimonials** — JSON-LD `Review`/`AggregateRating` OR page text containing "testimonial" / "★★★★" / "5 stars".
+- (HTTPS is already tracked as `has_ssl`; will be surfaced as a conversion finding later.)
+
+These are intentionally **not scored**. A scalar "Conversion: 42" is weaker than a specific sentence. Example output seen on westheimertransfer.com:
+
+> [medium/conversion] Your site's copyright says © 2013 — new visitors start to wonder if you're still in business.
+
 ## Scoring
 
 Weighted composite of four dimensions. Locked weights:

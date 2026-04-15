@@ -90,6 +90,15 @@ class BrowserCheckResult(BaseModel):
 
     json_ld_types: list[str] = Field(default_factory=list)  # ["LocalBusiness", ...]
 
+    # ── Conversion signals (above-the-fold + site-wide) ─────────────────────
+    phone_above_fold: bool = False
+    phone_text: str | None = None       # first tel: or phone regex match near top
+    cta_above_fold: bool = False
+    cta_text: str | None = None         # first CTA-ish button/link text
+    has_contact_form: bool = False
+    copyright_year: int | None = None   # max 4-digit year found in footer/body
+    has_reviews_or_testimonials: bool = False
+
     desktop_screenshot_png: bytes | None = None  # 1280x900 full-page
     mobile_screenshot_png: bytes | None = None   # 375x812 full-page
 
@@ -126,7 +135,7 @@ class HttpCheckResult(BaseModel):
 
 
 FindingCategory = Literal[
-    "performance", "mobile", "seo", "ai_readiness", "security"
+    "performance", "mobile", "seo", "ai_readiness", "security", "conversion"
 ]
 FindingSeverity = Literal["high", "medium", "low"]
 

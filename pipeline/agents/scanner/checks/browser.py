@@ -31,6 +31,10 @@ MOBILE_VIEWPORT = {"width": 375, "height": 812}
 
 NAV_TIMEOUT_MS = 30_000  # 30s hard cap per page load
 
+# "Above the fold" threshold for desktop. 900px mirrors viewport height;
+# elements with bounding box top < this are visible on first paint.
+ABOVE_FOLD_PX = 900
+
 
 async def fetch_browser_data(url: str) -> BrowserCheckResult:
     """Run Playwright against ``url``. Always returns a result; never raises."""
@@ -63,6 +67,7 @@ async def _extract(
     headings = await _extract_headings(desktop_page)
     images = await _extract_image_alts(desktop_page)
     json_ld_types = await _extract_json_ld_types(desktop_page)
+    conversion = await _extract_conversion_signals(desktop_page)
 
     await desktop_context.close()
 
@@ -89,6 +94,13 @@ async def _extract(
         image_count=images["total"],
         images_with_alt=images["with_alt"],
         json_ld_types=json_ld_types,
+        phone_above_fold=conversion["phone_above_fold"],
+        phone_text=conversion["phone_text"],
+        cta_above_fold=conversion["cta_above_fold"],
+        cta_text=conversion["cta_text"],
+        has_contact_form=conversion["has_contact_form"],
+        copyright_year=conversion["copyright_year"],
+        has_reviews_or_testimonials=conversion["has_reviews_or_testimonials"],
         desktop_screenshot_png=desktop_shot,
         mobile_screenshot_png=mobile_shot,
     )
@@ -139,6 +151,127 @@ async def _extract_image_alts(page: Any) -> dict[str, int]:
           const with_alt = imgs.filter(img => (img.alt || "").trim() !== "").length;
           return { total: imgs.length, with_alt: with_alt };
         }"""
+    )
+
+
+async def _extract_conversion_signals(page: Any) -> dict[str, Any]:
+    """Above-the-fold + site-wide conversion heuristics.
+
+    One JS round-trip returns everything: phone visibility near the top,
+    CTA-ish button/link visibility near the top, form presence anywhere,
+    max copyright year, and cheap trust-signal indicators.
+    """
+    return await page.evaluate(
+        """(threshold) => {
+          const isVisible = (el) => {
+            const r = el.getBoundingClientRect();
+            if (r.width === 0 || r.height === 0) return false;
+            const cs = window.getComputedStyle(el);
+            if (cs.visibility === 'hidden' || cs.display === 'none') return false;
+            if (parseFloat(cs.opacity) === 0) return false;
+            return true;
+          };
+          const topOf = (el) => el.getBoundingClientRect().top + window.scrollY;
+
+          // ── Phone above the fold ──
+          const PHONE_RE = /(\\+?\\d[\\d\\s\\-().]{7,}\\d)/;
+          let phone_above_fold = false;
+          let phone_text = null;
+          for (const a of document.querySelectorAll("a[href^='tel:']")) {
+            if (!isVisible(a)) continue;
+            if (topOf(a) < threshold) {
+              phone_above_fold = true;
+              phone_text = (a.textContent || a.href.replace('tel:', '')).trim();
+              break;
+            }
+          }
+          if (!phone_above_fold) {
+            // Fallback: visible text containing a phone-shaped string near top.
+            const candidates = document.querySelectorAll("header, nav, [class*='header'], [class*='top-bar']");
+            for (const c of candidates) {
+              if (!isVisible(c)) continue;
+              if (topOf(c) >= threshold) continue;
+              const m = PHONE_RE.exec(c.textContent || '');
+              if (m) { phone_above_fold = true; phone_text = m[0].trim(); break; }
+            }
+          }
+
+          // ── CTA above the fold ──
+          const CTA_KEYWORDS = [
+            "get a quote", "get quote", "request a quote", "request quote",
+            "free estimate", "free quote", "book now", "book online", "schedule",
+            "contact us", "get started", "call now", "request service",
+            "get a free", "request a free",
+          ];
+          const CTA_SINGLE_WORDS = ["quote", "book", "schedule", "contact", "call"];
+          let cta_above_fold = false;
+          let cta_text = null;
+          const clickables = [
+            ...document.querySelectorAll("a, button, [role='button']"),
+          ];
+          for (const el of clickables) {
+            if (!isVisible(el)) continue;
+            if (topOf(el) >= threshold) continue;
+            const text = (el.textContent || '').trim().toLowerCase();
+            if (!text || text.length > 60) continue;
+            if (CTA_KEYWORDS.some(k => text.includes(k))
+                || CTA_SINGLE_WORDS.some(w => new RegExp(`\\\\b${w}\\\\b`).test(text))) {
+              cta_above_fold = true;
+              cta_text = (el.textContent || '').trim().slice(0, 80);
+              break;
+            }
+          }
+
+          // ── Contact form anywhere on the page ──
+          let has_contact_form = false;
+          for (const f of document.querySelectorAll("form")) {
+            const inputs = f.querySelectorAll("input, textarea");
+            const hasTextLike = [...inputs].some(i => {
+              const t = (i.type || 'text').toLowerCase();
+              return ["text", "email", "tel", "textarea"].includes(t);
+            });
+            if (hasTextLike) { has_contact_form = true; break; }
+          }
+
+          // ── Max copyright year found in visible text ──
+          const bodyText = (document.body && document.body.innerText) || "";
+          let copyright_year = null;
+          const cpRe = /(?:©|&copy;|copyright)[^\\d]{0,20}((?:19|20)\\d{2})/gi;
+          let m;
+          while ((m = cpRe.exec(bodyText)) !== null) {
+            const y = parseInt(m[1], 10);
+            if (!isNaN(y) && (copyright_year === null || y > copyright_year)) {
+              copyright_year = y;
+            }
+          }
+
+          // ── Reviews / testimonials signals ──
+          let has_reviews_or_testimonials = false;
+          const jsonldBlocks = [...document.querySelectorAll("script[type='application/ld+json']")]
+              .map(s => (s.textContent || '').toLowerCase());
+          if (jsonldBlocks.some(b => b.includes('"review"') || b.includes('"aggregaterating"'))) {
+            has_reviews_or_testimonials = true;
+          }
+          if (!has_reviews_or_testimonials) {
+            const lower = bodyText.toLowerCase();
+            if (lower.includes("testimonial") || lower.includes("★★★★")
+                || /\\b5\\s*stars?\\b/i.test(lower)
+                || /\\b5\\s*\\/\\s*5\\b/i.test(lower)) {
+              has_reviews_or_testimonials = true;
+            }
+          }
+
+          return {
+            phone_above_fold,
+            phone_text,
+            cta_above_fold,
+            cta_text,
+            has_contact_form,
+            copyright_year,
+            has_reviews_or_testimonials,
+          };
+        }""",
+        ABOVE_FOLD_PX,
     )
 
 
