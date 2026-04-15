@@ -25,7 +25,13 @@ from pipeline.flows.lead_generator import generate_leads
 def main() -> None:
     lead_generation = generate_leads.to_deployment(
         name="lead-generation",
-        parameters={"vertical": "movers", "city": "Austin", "country": "US", "limit": 10},
+        parameters={
+            "source": "bbb",
+            "vertical": "movers",
+            "state": "TX",
+            "city": "Houston",
+            "max_pages": None,
+        },
     )
 
     serve(lead_generation)
