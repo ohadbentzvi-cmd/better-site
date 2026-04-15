@@ -34,3 +34,38 @@ class TestCanonicalizeUrl:
 
     def test_drops_fragment(self) -> None:
         assert "#" not in canonicalize_url("https://acme-movers.com/about#section")
+
+    def test_strips_www_prefix(self) -> None:
+        assert canonicalize_url("https://www.acme.com") == "https://acme.com"
+
+    def test_collapses_root_slash(self) -> None:
+        assert canonicalize_url("https://acme.com/") == canonicalize_url("https://acme.com")
+
+    def test_keeps_non_root_trailing_slash(self) -> None:
+        assert canonicalize_url("https://acme.com/services/").endswith("/services/")
+
+    def test_strips_utm_params(self) -> None:
+        assert "utm_" not in canonicalize_url("https://acme.com/?utm_source=bbb&x=1")
+
+    def test_keeps_non_tracking_params_sorted(self) -> None:
+        assert canonicalize_url("https://acme.com/?b=2&a=1") == "https://acme.com/?a=1&b=2"
+
+    def test_strips_default_http_port(self) -> None:
+        assert canonicalize_url("http://acme.com:80/") == "http://acme.com"
+
+    def test_keeps_non_default_port(self) -> None:
+        assert canonicalize_url("https://acme.com:8443/") == "https://acme.com:8443"
+
+    def test_rejects_non_http_scheme(self) -> None:
+        import pytest
+        from pipeline.utils.url import InvalidURLError
+
+        with pytest.raises(InvalidURLError):
+            canonicalize_url("javascript:alert(1)")
+
+    def test_rejects_empty(self) -> None:
+        import pytest
+        from pipeline.utils.url import InvalidURLError
+
+        with pytest.raises(InvalidURLError):
+            canonicalize_url("")
