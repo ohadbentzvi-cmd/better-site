@@ -23,6 +23,10 @@ _EXPECTED_SCHEMA_BY_TABLE = {
     "emails": OPS_SCHEMA,
     "suppression_list": OPS_SCHEMA,
     "events": OPS_SCHEMA,
+    "analysts": OPS_SCHEMA,
+    "login_attempts": OPS_SCHEMA,
+    "lead_reviews": OPS_SCHEMA,
+    "scan_reviews": OPS_SCHEMA,
     "sites": APP_SCHEMA,
     "payments": APP_SCHEMA,
 }

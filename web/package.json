@@ -16,7 +16,10 @@
     "@stripe/stripe-js": "^3.0.0",
     "@stripe/react-stripe-js": "^2.5.0",
     "isomorphic-dompurify": "^2.9.0",
-    "@sentry/nextjs": "^7.100.0"
+    "@sentry/nextjs": "^7.100.0",
+    "jose": "^5.2.0",
+    "lucide-react": "^0.363.0",
+    "clsx": "^2.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

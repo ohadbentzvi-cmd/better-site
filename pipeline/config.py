@@ -65,6 +65,17 @@ class Settings(BaseSettings):
     ADMIN_BASIC_AUTH_USER: str = ""
     ADMIN_BASIC_AUTH_PASSWORD: str = ""
 
+    # Admin Review Console (Phase 5, pulled forward).
+    #   ADMIN_SERVICE_TOKEN — shared secret between Next.js web and FastAPI;
+    #       FastAPI rejects any /admin/* request without a matching token.
+    #       Must be >=32 bytes of random in production.
+    #   ADMIN_SESSION_SECRET — HMAC key Next.js uses to sign its session cookie.
+    #       Read by web/ only; listed here so it's documented in one place.
+    ADMIN_SERVICE_TOKEN: str = ""
+    ADMIN_SESSION_SECRET: str = ""
+    ADMIN_LOGIN_RATE_LIMIT_WINDOW_MIN: int = Field(default=15, ge=1, le=1440)
+    ADMIN_LOGIN_RATE_LIMIT_MAX_FAILURES: int = Field(default=5, ge=1, le=100)
+
     EXTRACTION_STRATEGY: Literal["html_only", "vision_full", "hybrid", "gmb_first"] = "html_only"
     SALES_AGENT_BACKEND: Literal[
         "null", "console", "smartlead", "instantly", "smtp", "postmark"

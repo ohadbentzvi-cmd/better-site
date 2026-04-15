@@ -8,6 +8,24 @@ for short-to-medium-term engineering debt captured during reviews.
 
 ## Open
 
+### T3 — Add IP-based rate limit to `/admin/auth/verify`
+**Type:** security hardening — Admin Review Console
+**Captured:** 2026-04-16 during `/review` of the admin build
+**Priority:** P2 (defer)
+
+**Problem:** the current rate limiter keys on `username`, so an attacker can rotate usernames and force unlimited bcrypt-cost-12 hashes (~300 ms each). On Railway's shared CPU, a dozen concurrent attackers can flatline the api service.
+
+**Why not blocking today:** the admin surface is an internal tool reachable by 2–3 analysts. Railway's edge blocks most automated abuse, and no public entrypoint exposes `/admin/auth/verify`. The pragmatic defense today is keeping the service token secret and the admin DNS unadvertised.
+
+**Fix when it matters:**
+1. Add an `ip` column to `ops.login_attempts` (nullable until backfilled).
+2. Populate from `X-Forwarded-For` (trust only Railway's edge proxy) in `api/auth.py::authenticate_analyst`.
+3. Check failures-per-IP in the last 15 min alongside failures-per-username. Trip 429 on whichever limit hits first.
+
+**Revisit trigger:** before opening any public `/admin/*` entrypoint, or when the analyst pool grows beyond ~5 people (each failed login now costs more than one user's time).
+
+---
+
 ### T2 — Tighten BBB rating / accreditation selectors against live markup
 **Type:** follow-up to Lead Generator v1
 **Captured:** 2026-04-15
