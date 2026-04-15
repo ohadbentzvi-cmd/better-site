@@ -12,7 +12,7 @@ This repo contains the full system: the agent pipeline, the preview web app (pla
 
 ## Status
 
-**v0.1.0** — Foundations + Lead Generator v1 (BBB source) live in staging.
+**v0.2.0** — Foundations + Lead Generator v1 (BBB source) + Website Scanner v1 (PageSpeed + Playwright + HTTP) live in staging.
 
 See [`PROGRESS.md`](./PROGRESS.md) for the roadmap and version history.
 
@@ -43,12 +43,12 @@ Behind it sits a **Python pipeline** with five sequential agents (four data + on
    │          │                 │          │              │
 ┌─────────┐┌──────────┐┌─────────────┐┌─────────┐┌────────────────┐
 │Lead Gen ││ Scanner  ││  Extractor  ││ Builder ││  Sales Agent   │
-│ (v1 —   ││ (next)   ││   (later)   ││ (later) ││   (later)      │
-│  BBB)   ││          ││             ││         ││                │
+│ (v1 —   ││ (v1 —    ││   (next)    ││ (later) ││   (later)      │
+│  BBB)   ││  PSI+PW) ││             ││         ││                │
 └─────────┘└──────────┘└─────────────┘└─────────┘└────────────────┘
 ```
 
-Today only the **Lead Generator** is built. Scanner is next. The remaining agents + web app land phase-by-phase; tech stack for each is decided when the phase starts, not ahead of time.
+Today **Lead Generator** and **Scanner** are built. Extractor is next. The remaining agents + web app land phase-by-phase; tech stack for each is decided when the phase starts, not ahead of time.
 
 ---
 
@@ -83,6 +83,23 @@ Ingest pipeline (source-agnostic):
 - DB work off-loaded via `asyncio.to_thread` so the Prefect event loop isn't blocked.
 
 Details + source-pluggable architecture: [`docs/lead_generator.md`](./docs/lead_generator.md).
+
+---
+
+## Website Scanner (shipped, v1)
+
+Target-pluggable. Today two targets: `LeadTableTarget` (pulls unscanned leads from `ops.leads`) and `UrlListTarget` (explicit URLs, auto-matches to existing leads by canonical domain).
+
+Scoring: Performance 45% + SEO 20% + AI-Readiness 20% + Security 15%. Partial scans (any unmeasurable dimension) produce `NULL` overall instead of a silently rescaled score.
+
+Checks, per URL:
+- **PageSpeed Insights API** (mobile + desktop, concurrent) — Google does the rendering; free tier covers 12k URL scans/day.
+- **Single Playwright session** — desktop + mobile screenshots, plus DOM extraction (title, meta, OG tags, heading structure, image alt coverage, JSON-LD `@type`).
+- **Parallel HTTP checks** — `robots.txt`, `llms.txt`, sitemap(s), five security headers.
+
+Output: structured `Finding` list with SMB-ready language (e.g. _"Your site takes 3.9 seconds to load on mobile — slow enough that mobile visitors start bouncing."_) + per-dimension scores + raw metrics (LCP, CLS, TBT, page weight, …). Everything UPSERTed into `ops.scans` keyed on `lead_id`.
+
+Details: [`docs/scanner.md`](./docs/scanner.md).
 
 ---
 

@@ -1,0 +1,21 @@
+{
+  "lighthouseResult": {
+    "categories": {
+      "performance": {"score": 0.42},
+      "seo": {"score": 0.78},
+      "best-practices": {"score": 0.85}
+    },
+    "audits": {
+      "largest-contentful-paint": {"numericValue": 4800.0},
+      "first-contentful-paint": {"numericValue": 2800.0},
+      "cumulative-layout-shift": {"numericValue": 0.31},
+      "total-blocking-time": {"numericValue": 650.0},
+      "server-response-time": {"numericValue": 420.0},
+      "speed-index": {"numericValue": 5200.0},
+      "total-byte-weight": {"numericValue": 3400000},
+      "unused-css-rules": {"score": 0.3},
+      "unused-javascript": {"score": 0.4},
+      "render-blocking-resources": {"score": 0.5}
+    }
+  }
+}

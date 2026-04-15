@@ -15,7 +15,8 @@ Running log of where the project is, what's done, what's next, and version histo
 **Phase 0 — Planning** ✅ DONE
 **Phase 1 — Foundations** ✅ DONE
 **Phase 2 — Lead Generator** ✅ v1 SHIPPED (BBB only; improvements open)
-**Phase 2.5 — Website Scanner** ⏳ NEXT
+**Phase 2.5 — Website Scanner** ✅ v1 SHIPPED (PageSpeed + Playwright + HTTP)
+**Phase 3 — Information Extractor** ⏳ NEXT
 
 ---
 
@@ -69,15 +70,17 @@ Tech stack for phases later than the current + next is intentionally left undefi
 - Deep merge of `source_metadata` for multi-source overlap.
 - Multi-country (CA, AU).
 
-### Phase 2.5 — Website Scanner ⏳ NEXT
+### Phase 2.5 — Website Scanner ✅ v1 SHIPPED
 
-Takes a `lead_id`, fetches the lead's site, scores it, writes `ops.scans`, flips `leads.status`. Exact scoring design + any external APIs will be decided at the start of the phase.
+Scores a URL across four weighted dimensions (Performance 45% + SEO 20% + AI-Readiness 20% + Security 15%) and produces SMB-ready findings for cold-email copy. Full walkthrough: [`docs/scanner.md`](./docs/scanner.md).
 
-What we know going in:
-- Idempotent UPSERT keyed on `lead_id`.
-- SSRF-safe fetches via `pipeline.utils.ssrf.assert_safe_url()`.
-- Explicit failure modes, no catch-all.
-- Structured log events per scan step.
+- Two input modes: explicit URL list OR pull unscanned leads from `ops.leads`.
+- Three checks per URL: PageSpeed Insights API (mobile + desktop, concurrent) → single Playwright session (screenshots + DOM extraction) → parallel HTTP checks (robots / llms / sitemap / security headers).
+- Pure scoring function; findings co-located with the rules that trigger them.
+- Partial scans (any unmeasurable dimension) → `overall=NULL` + `scan_partial=true`. No silent rescaling.
+- Per-URL + per-run markdown artifacts; screenshots scaled to 800px JPEG for UI performance.
+- Schema migration: `score_performance / score_seo / score_ai_readiness / score_security`, `raw_metrics` JSONB, `scanned_url`, `pagespeed_available`, `scan_partial` columns on `ops.scans`.
+- Smoke-tested live: westheimertransfer.com scored 80/100 with 3 findings written to `ops.scans`.
 
 ### Phase 3+ (not yet specified)
 
@@ -101,6 +104,7 @@ Design + tech stack for each of these lands at phase start.
 | 2026-04-15 | Lead Generator v1 (BBB pluggable source) merged to main | — |
 | 2026-04-15 | Deployment params fix (flow signature drift after v1 rewrite) | — |
 | 2026-04-15 | Observability: structlog → Prefect logs; run-summary markdown artifact | v0.1.0 |
+| 2026-04-15 | Scanner v1 shipped (PageSpeed + Playwright + HTTP), UPSERT to ops.scans | v0.2.0 |
 
 ---
 
@@ -199,6 +203,19 @@ Empty project connected to GitHub. Plan review done. `README` + `PROGRESS` writt
 
 ### v0.0.2 — 2026-04-11
 Eng review; architecture revised from self-serve to cold-email-only for POC; Sales Agent interface pattern locked; UPSERT idempotency locked.
+
+### v0.2.0 — 2026-04-15
+Website Scanner v1 shipped.
+
+- Flow `site-scan` with two input modes (URL list or unscanned leads).
+- PageSpeed Insights API (mobile + desktop, concurrent) + one Playwright session (desktop + mobile screenshots, DOM extraction) + parallel HTTP checks.
+- Four dimension scores (Performance 45 / SEO 20 / AI 20 / Security 15) + composite overall. Partial scans explicitly `NULL` rather than silently rescaled.
+- Findings produced in email-ready language, colocated with scoring rules.
+- New columns on `ops.scans`; migration `c3d4e5f6a7b8`.
+- Per-URL + per-run Prefect markdown artifacts with scaled screenshots.
+- Dockerfile: Chromium baked in via `playwright install --with-deps chromium`.
+
+**Next version (v0.3.0):** Information Extractor — turn a scanned lead's website into a structured `ExtractionResult` the Builder can use.
 
 ### v0.1.0 — 2026-04-15
 Foundations done + Lead Generator v1 shipped.

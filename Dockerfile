@@ -24,6 +24,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pipeline/requirements.txt /app/pipeline/requirements.txt
 RUN pip install -r /app/pipeline/requirements.txt
 
+# Playwright browser binaries + system deps. Needed by the Scanner agent.
+# Adds ~400MB but is cached as its own layer so we only pay the cost on
+# Playwright-version bumps.
+RUN playwright install --with-deps chromium
+
 # Copy the rest of the repo. Flow code lives under pipeline/.
 COPY . /app
 
