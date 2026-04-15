@@ -17,12 +17,21 @@ Run locally (only when no Railway worker is live — otherwise they race):
 
 from __future__ import annotations
 
-from prefect import serve
+import os
 
-from pipeline.flows.lead_generator import generate_leads
+# Teach Prefect to capture logs emitted by our own ``pipeline.*`` loggers, not
+# just ``prefect.*``. Must be set BEFORE any ``prefect`` import because Prefect
+# reads its logging config once at import time.
+os.environ.setdefault("PREFECT_LOGGING_EXTRA_LOGGERS", "pipeline")
+
+from prefect import serve  # noqa: E402
+
+from pipeline.flows.lead_generator import generate_leads  # noqa: E402
+from pipeline.observability import configure as configure_logging  # noqa: E402
 
 
 def main() -> None:
+    configure_logging()
     lead_generation = generate_leads.to_deployment(
         name="lead-generation",
         parameters={
