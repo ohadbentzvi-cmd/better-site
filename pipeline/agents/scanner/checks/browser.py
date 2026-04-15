@@ -29,7 +29,17 @@ log = structlog.get_logger(__name__)
 DESKTOP_VIEWPORT = {"width": 1280, "height": 900}
 MOBILE_VIEWPORT = {"width": 375, "height": 812}
 
-NAV_TIMEOUT_MS = 30_000  # 30s hard cap per page load
+# Nav strategy:
+#   - Primary: wait for the ``load`` event (all initial resources done).
+#     Unlike ``networkidle``, this is NOT blocked by long-polling analytics,
+#     live-chat widgets, or ads that keep the network busy forever.
+#   - Fallback on timeout: ``domcontentloaded`` (DOM parsed, before images /
+#     CSS finish) so we still get DOM + a screenshot on pathological sites.
+#   - Best-effort short ``networkidle`` wait after load to let late images
+#     paint into the screenshot. Swallows its own timeout.
+NAV_TIMEOUT_MS = 30_000
+FALLBACK_NAV_TIMEOUT_MS = 15_000
+POST_LOAD_SETTLE_MS = 3_000
 
 # "Above the fold" threshold for desktop. 900px mirrors viewport height;
 # elements with bounding box top < this are visible on first paint.
@@ -59,7 +69,7 @@ async def _extract(
     # ── Desktop pass: screenshot + DOM extraction ───────────────────────────
     desktop_context = await browser.new_context(viewport=DESKTOP_VIEWPORT)
     desktop_page = await desktop_context.new_page()
-    await desktop_page.goto(url, wait_until="networkidle", timeout=NAV_TIMEOUT_MS)
+    await _navigate_safely(desktop_page, url)
     desktop_shot = await desktop_page.screenshot(full_page=True, type="png")
 
     title = await desktop_page.title()
@@ -74,7 +84,7 @@ async def _extract(
     # ── Mobile pass: screenshot only. Viewport meta is DOM, already captured.
     mobile_context = await browser.new_context(viewport=MOBILE_VIEWPORT)
     mobile_page = await mobile_context.new_page()
-    await mobile_page.goto(url, wait_until="networkidle", timeout=NAV_TIMEOUT_MS)
+    await _navigate_safely(mobile_page, url)
     mobile_shot = await mobile_page.screenshot(full_page=True, type="png")
     await mobile_context.close()
 
@@ -104,6 +114,33 @@ async def _extract(
         desktop_screenshot_png=desktop_shot,
         mobile_screenshot_png=mobile_shot,
     )
+
+
+async def _navigate_safely(page: Any, url: str) -> None:
+    """Two-tier ``page.goto`` with best-effort settle.
+
+    Primary: wait for ``load`` — NOT blocked by analytics/chat widgets
+    that keep ``networkidle`` permanently busy.
+    Fallback: ``domcontentloaded`` so we still get DOM + screenshot on
+    pathological sites (badly-served CSS, hung third-party script, etc.).
+    Settle: short best-effort ``networkidle`` wait so late images make
+    it into the screenshot. Swallows its own timeout.
+    """
+    try:
+        await page.goto(url, wait_until="load", timeout=NAV_TIMEOUT_MS)
+    except PlaywrightTimeoutError as e:
+        log.info(
+            "browser.goto_load_timeout_fallback_domcontentloaded",
+            url=url,
+            error=str(e),
+        )
+        await page.goto(url, wait_until="domcontentloaded", timeout=FALLBACK_NAV_TIMEOUT_MS)
+
+    try:
+        await page.wait_for_load_state("networkidle", timeout=POST_LOAD_SETTLE_MS)
+    except PlaywrightTimeoutError:
+        # Expected on sites with ongoing analytics. Not an error.
+        pass
 
 
 async def _extract_meta(page: Any) -> dict[str, str]:
