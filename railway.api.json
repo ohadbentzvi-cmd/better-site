@@ -5,7 +5,7 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "sh -c 'alembic -c pipeline/alembic.ini upgrade head && uvicorn api.main:app --host 0.0.0.0 --port $PORT'",
+    "startCommand": "sh -c 'cd /app/pipeline && PYTHONPATH=/app alembic upgrade head && cd /app && uvicorn api.main:app --host 0.0.0.0 --port $PORT'",
     "healthcheckPath": "/health",
     "restartPolicyType": "ON_FAILURE"
   }
