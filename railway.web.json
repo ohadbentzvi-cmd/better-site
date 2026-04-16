@@ -5,7 +5,7 @@
     "buildCommand": "cd web && npm install && npm run build"
   },
   "deploy": {
-    "startCommand": "cd web && npm run start -- -p $PORT",
+    "startCommand": "sh -c 'cd web && npm run start -- -p $PORT'",
     "restartPolicyType": "ON_FAILURE"
   }
 }

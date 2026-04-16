@@ -5,11 +5,15 @@ We fire two calls per URL (mobile + desktop). Each returns a rich
 is graceful — parser returns ``None`` fields rather than raising, and the
 outer ``fetch_pagespeed`` sets ``available=False`` on total failure so
 scoring can mark the scan partial.
+
+Rate limiting: a module-level semaphore + inter-request delay keeps us
+under Google's quota (~25 req/100s free tier, higher with API key).
 """
 
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 import httpx
@@ -29,6 +33,24 @@ PAGESPEED_ENDPOINT = (
     "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 )
 PAGESPEED_TIMEOUT_SECS = 60.0  # Google's own runs can take 30-45s
+
+# Rate limiting: allow max 2 concurrent PageSpeed requests and enforce a
+# minimum gap between requests to stay under Google's per-second quota.
+_PAGESPEED_SEMAPHORE = asyncio.Semaphore(2)
+_MIN_REQUEST_INTERVAL_SECS = 2.0  # ≤30 req/min ≈ safe for free tier
+_last_request_time: float = 0.0
+_rate_lock = asyncio.Lock()
+
+
+async def _rate_limit() -> None:
+    """Wait until at least ``_MIN_REQUEST_INTERVAL_SECS`` since the last request."""
+    global _last_request_time
+    async with _rate_lock:
+        now = time.monotonic()
+        elapsed = now - _last_request_time
+        if elapsed < _MIN_REQUEST_INTERVAL_SECS:
+            await asyncio.sleep(_MIN_REQUEST_INTERVAL_SECS - elapsed)
+        _last_request_time = time.monotonic()
 
 
 class PageSpeedError(Exception):
@@ -84,18 +106,26 @@ async def _fetch_one(
 
     async with httpx.AsyncClient(timeout=PAGESPEED_TIMEOUT_SECS) as client:
         async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=2, min=2, max=20),
+            stop=stop_after_attempt(5),
+            wait=wait_exponential(multiplier=4, min=4, max=60),
             retry=retry_if_exception_type(
                 (httpx.TransportError, PageSpeedRateLimitError)
             ),
             reraise=True,
         ):
             with attempt:
-                query = [(k, v) for k, v in params.items()]
-                query.extend(("category", c) for c in extra_categories)
-                response = await client.get(PAGESPEED_ENDPOINT, params=query)
+                async with _PAGESPEED_SEMAPHORE:
+                    await _rate_limit()
+                    query = [(k, v) for k, v in params.items()]
+                    query.extend(("category", c) for c in extra_categories)
+                    response = await client.get(PAGESPEED_ENDPOINT, params=query)
                 if response.status_code == 429:
+                    log.warning(
+                        "pagespeed.rate_limited",
+                        url=url,
+                        strategy=strategy,
+                        attempt=attempt.retry_state.attempt_number,
+                    )
                     raise PageSpeedRateLimitError(f"429 on {url} / {strategy}")
                 if response.status_code >= 500:
                     raise httpx.TransportError(
