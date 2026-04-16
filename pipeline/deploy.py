@@ -27,6 +27,7 @@ os.environ.setdefault("PREFECT_LOGGING_EXTRA_LOGGERS", "pipeline")
 from prefect import serve  # noqa: E402
 
 from pipeline.flows.lead_generator import generate_leads  # noqa: E402
+from pipeline.flows.lead_generator_batch import generate_leads_batch  # noqa: E402
 from pipeline.flows.scanner import scan_sites  # noqa: E402
 from pipeline.observability import configure as configure_logging  # noqa: E402
 
@@ -45,12 +46,22 @@ def main() -> None:
         },
     )
 
+    lead_generation_batch = generate_leads_batch.to_deployment(
+        name="lead-generation-batch",
+        parameters={
+            "source": "bbb",
+            "targets_csv": "pipeline/targets/movers_us.csv",
+            "max_pages_per_city": None,
+            "abort_on_repeated_block": 2,
+        },
+    )
+
     site_scan = scan_sites.to_deployment(
         name="site-scan",
         parameters={"urls": None, "limit": 50},
     )
 
-    serve(lead_generation, site_scan)
+    serve(lead_generation, lead_generation_batch, site_scan)
 
 
 if __name__ == "__main__":

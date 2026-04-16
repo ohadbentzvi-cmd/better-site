@@ -54,8 +54,10 @@ Tech stack for phases later than the current + next is intentionally left undefi
 - [x] `ops.leads` gains `state`, `source_metadata` JSONB, `email_source`
 - [x] In-run dedup by `canonical_domain`
 - [x] `pipeline/flows/lead_generator.py` — Prefect flow with markdown run-summary artifact + `get_run_logger` output
+- [x] `pipeline/flows/lead_generator_batch.py` — batch flow: CSV-driven multi-city runs, per-city failure isolation, 2x-403 circuit breaker
+- [x] `pipeline/targets/movers_us.csv` — repo-owned target list (columns: `vertical,state,city`)
 - [x] `scripts/enqueue_leads.py` — CLI for one-off runs
-- [x] `scripts/seed_cities.py` — hardcoded seed list of US metros
+- [x] `scripts/seed_cities.py` — thin CLI wrapper around the batch flow
 - [x] `docs/lead_generator.md` — dev-team walkthrough + add-a-source guide
 - [x] Smoke-tested live: Houston + Austin + San Diego leads ingested cleanly, UPSERT idempotent across reruns
 
@@ -137,7 +139,9 @@ Extend with each new codepath. Catch-all `except Exception` is forbidden.
 | Codepath | Failure | Rescue |
 |---|---|---|
 | BBB search/profile GET | 429 | Tenacity backoff; respect `Retry-After` |
-| BBB search/profile GET | 403 / CAPTCHA | `BBBBlockedError`; halt batch, alert |
+| BBB search/profile GET | 403 / CAPTCHA | `BBBBlockedError`; fail the city, continue batch |
+| BBB batch run | Repeated 403s across cities | `BBBBatchAbortedError` after N blocks (default 2); halt batch, alert |
+| BBB profile GET | 404 (stale profile URL) | `BBBNotFoundError`; skip row, log, continue |
 | Card parse | Unexpected HTML | `BBBParseError`; skip row, log, continue |
 | Fixture test | BBB changed markup | Parser test fails at build time — the canary |
 | Canonicalize URL | Malformed / non-http(s) | `InvalidURLError`; skip lead |

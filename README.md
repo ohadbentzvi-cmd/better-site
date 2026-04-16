@@ -159,7 +159,7 @@ bettersite/
 │
 ├── scripts/
 │   ├── enqueue_leads.py     ← CLI: trigger a one-off lead-generation run
-│   └── seed_cities.py       ← seed list for batch runs
+│   └── seed_cities.py       ← CLI wrapper for the batch flow (CSV-driven)
 │
 ├── tests/
 │   ├── unit/

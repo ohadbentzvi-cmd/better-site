@@ -84,8 +84,10 @@ One `httpx.AsyncClient` per flow run, HTTP/2 on, connection pool of 10 with 5 ke
 | Class | Meaning | Policy |
 |---|---|---|
 | `BBBRateLimitError` | 429 with `Retry-After` respected | Retry (tenacity) |
-| `BBBBlockedError` | 403 / CAPTCHA page | Raise to Prefect; halt batch, alert |
+| `BBBBlockedError` | 403 / CAPTCHA page | Single-city flow: halt. Batch flow: fail the city; second 403 aborts the batch. |
+| `BBBNotFoundError` | 404 on a profile or search URL | Skip row, log, continue |
 | `BBBParseError` | HTML structure unexpected | Skip row, log, continue |
+| `BBBBatchAbortedError` | Raised by the batch flow after N 403s | Halt batch; operator intervenes |
 | `BBBError` | Base class for all of the above | — |
 
 No `except Exception`. Every exception is named.
@@ -140,14 +142,39 @@ Proper deep-merge of `source_metadata` (preserving historical per-source detail 
 
 ## Running it
 
-**Prefect UI (production-like):** the `lead-generation` deployment on your Prefect server takes the same params as the flow function.
+### Single city
 
-**CLI (one-off):**
+**Prefect UI:** the `lead-generation` deployment takes `source`, `vertical`, `state`, `city`, `max_pages`.
+
+**CLI:**
 
 ```
 python -m scripts.enqueue_leads --state TX --city Houston --max-pages 1
-python -m scripts.seed_cities --max-pages 5     # all seed cities, capped
 ```
+
+### Batch across many cities
+
+**Prefect UI:** the `lead-generation-batch` deployment takes:
+- `source` — default `bbb`.
+- `targets_csv` — path to a CSV with columns `vertical,state,city`. Default: `pipeline/targets/movers_us.csv`.
+- `max_pages_per_city` — optional cap. Default `null` (walk until exhausted).
+- `abort_on_repeated_block` — halt after this many BBB 403s in one run. Default `2`.
+
+**CLI:**
+
+```
+python -m scripts.seed_cities                                       # default CSV
+python -m scripts.seed_cities --targets pipeline/targets/foo.csv   # custom CSV
+python -m scripts.seed_cities --max-pages-per-city 5               # testing
+```
+
+**Chunking guidance.** A city takes ~2-3 min. A 200-row CSV is ~10 hours and one Railway service restart forfeits everything since the crash point. For production runs, **split CSVs into ~50-row chunks** so a crash only costs one chunk. UPSERT makes re-running a chunk safe; chunking bounds the blast radius.
+
+**Circuit breaker.** The batch flow tracks 403s across cities. One 403 fails that city and continues. A second 403 in the same run raises `BBBBatchAbortedError` and halts the flow: two in a row means our IP is flagged, and continuing just deepens the ban.
+
+### Downstream cost
+
+The Scanner is **pull-based** (`scan_sites` flow takes `limit`, default 50). Inserting a lead does **not** auto-trigger a scan. You control Scanner / Extractor / Sales-agent cost by choosing when to run `site-scan` and with what limit — running lead-gen wide is cheap.
 
 ---
 

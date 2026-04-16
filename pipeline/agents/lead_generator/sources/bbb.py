@@ -86,6 +86,10 @@ class BBBBlockedError(BBBError):
     """403 from BBB — batch should halt, not be silently retried."""
 
 
+class BBBBatchAbortedError(BBBError):
+    """Too many 403s across cities in one batch run. Halt to protect the IP."""
+
+
 class BBBNotFoundError(BBBError):
     """404 from BBB — stale profile/search URL. Skip the row, log, continue."""
 
