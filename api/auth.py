@@ -109,7 +109,44 @@ def require_analyst(
     return analyst_id
 
 
+def require_superadmin(
+    x_analyst_id: Annotated[str | None, Header()] = None,
+) -> uuid.UUID:
+    """Like require_analyst, but also checks is_superadmin=True."""
+    if not x_analyst_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing X-Analyst-Id header",
+        )
+    try:
+        analyst_id = uuid.UUID(x_analyst_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid X-Analyst-Id header",
+        ) from e
+
+    session: Session = session_scope()
+    try:
+        row = session.scalar(
+            select(Analyst).where(
+                Analyst.id == analyst_id,
+                Analyst.active.is_(True),
+                Analyst.is_superadmin.is_(True),
+            )
+        )
+    finally:
+        session.close()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superadmin access required",
+        )
+    return analyst_id
+
+
 AnalystId = Annotated[uuid.UUID, Depends(require_analyst)]
+SuperadminId = Annotated[uuid.UUID, Depends(require_superadmin)]
 ServiceToken = Annotated[None, Depends(require_service_token)]
 
 

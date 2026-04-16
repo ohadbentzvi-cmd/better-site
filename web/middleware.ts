@@ -55,6 +55,7 @@ export async function middleware(request: NextRequest) {
       const fresh = await signSession({
         analyst_id: session.analyst_id,
         username: session.username,
+        is_superadmin: session.is_superadmin,
       });
       res.cookies.set(SESSION_COOKIE_NAME, fresh, {
         httpOnly: true,

@@ -29,14 +29,16 @@ export async function loginAction(_prev: unknown, formData: FormData) {
   }
 
   try {
-    const resp = await apiFetch<{ analyst_id: string; username: string }>(
-      "/admin/auth/verify",
-      { method: "POST", body: { username, password } },
-    );
+    const resp = await apiFetch<{
+      analyst_id: string;
+      username: string;
+      is_superadmin: boolean;
+    }>("/admin/auth/verify", { method: "POST", body: { username, password } });
 
     const token = await signSession({
       analyst_id: resp.analyst_id,
       username: resp.username,
+      is_superadmin: resp.is_superadmin,
     });
     cookies().set(SESSION_COOKIE_NAME, token, {
       httpOnly: true,
@@ -176,4 +178,59 @@ export async function submitEmailBackfillAction(payload: SubmitEmailPayload) {
 
   revalidatePath(`/admin/leads/${payload.leadId}`);
   return { ok: true };
+}
+
+// ── Create analyst (superadmin only) ────────────────────────────────────
+interface CreateAnalystPayload {
+  username: string;
+  password: string;
+}
+
+export async function createAnalystAction(payload: CreateAnalystPayload) {
+  const session = await currentSession();
+  if (!session) return { error: "Session expired. Reload the page." };
+
+  try {
+    const resp = await apiFetch<{ analyst_id: string; username: string }>(
+      "/admin/analysts",
+      { method: "POST", session, body: payload },
+    );
+    return { ok: true, analyst_id: resp.analyst_id, username: resp.username };
+  } catch (err) {
+    if (err instanceof ApiError) {
+      if (err.status === 403) return { error: "Only superadmins can create analysts." };
+      if (err.status === 409) return { error: `Username "${payload.username}" already exists.` };
+      if (err.status === 422) return { error: "Username must be alphanumeric (a-z, 0-9, _, ., -). Password must be at least 8 characters." };
+    }
+    return { error: "Something failed on our end. Try again." };
+  }
+}
+
+// ── Change password ─────────────────────────────────────────────────────
+interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export async function changePasswordAction(payload: ChangePasswordPayload) {
+  const session = await currentSession();
+  if (!session) return { error: "Session expired. Reload the page." };
+
+  try {
+    await apiFetch("/admin/auth/change-password", {
+      method: "POST",
+      session,
+      body: {
+        current_password: payload.currentPassword,
+        new_password: payload.newPassword,
+      },
+    });
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof ApiError) {
+      if (err.status === 401) return { error: "Current password is incorrect." };
+      if (err.status === 422) return { error: "New password must be at least 8 characters." };
+    }
+    return { error: "Something failed on our end. Try again." };
+  }
 }

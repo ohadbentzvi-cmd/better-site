@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     ADMIN_LOGIN_RATE_LIMIT_WINDOW_MIN: int = Field(default=15, ge=1, le=1440)
     ADMIN_LOGIN_RATE_LIMIT_MAX_FAILURES: int = Field(default=5, ge=1, le=100)
 
+    # One-time superadmin seed. Consumed by the migration that adds
+    # is_superadmin. Set in Railway env vars, run migration, then remove.
+    ADMIN_SUPERADMIN_USERNAME: str = ""
+    ADMIN_SUPERADMIN_PASSWORD: str = ""
+
     EXTRACTION_STRATEGY: Literal["html_only", "vision_full", "hybrid", "gmb_first"] = "html_only"
     SALES_AGENT_BACKEND: Literal[
         "null", "console", "smartlead", "instantly", "smtp", "postmark"

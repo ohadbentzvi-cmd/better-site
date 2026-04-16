@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ListChecks, LogOut } from "lucide-react";
+import { ListChecks, LogOut, Settings } from "lucide-react";
 import { logoutAction } from "@/app/admin/actions";
 
 interface SidebarProps {
@@ -12,6 +12,24 @@ interface SidebarProps {
 export function Sidebar({ username }: SidebarProps) {
   const pathname = usePathname() ?? "";
   const isLeads = pathname.startsWith("/admin/leads");
+  const isSettings = pathname.startsWith("/admin/settings");
+
+  function navLink(href: string, active: boolean, icon: React.ReactNode, label: string) {
+    return (
+      <Link
+        href={href}
+        aria-current={active ? "page" : undefined}
+        className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+          active
+            ? "bg-[var(--surface-2)] text-[var(--text-primary)] font-medium"
+            : "text-[var(--text-secondary)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]"
+        }`}
+      >
+        {icon}
+        <span>{label}</span>
+      </Link>
+    );
+  }
 
   return (
     <aside
@@ -26,18 +44,8 @@ export function Sidebar({ username }: SidebarProps) {
       </div>
 
       <nav className="flex-1 py-2">
-        <Link
-          href="/admin/leads"
-          aria-current={isLeads ? "page" : undefined}
-          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-            isLeads
-              ? "bg-[var(--surface-2)] text-[var(--text-primary)] font-medium"
-              : "text-[var(--text-secondary)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]"
-          }`}
-        >
-          <ListChecks size={16} aria-hidden="true" />
-          <span>Leads</span>
-        </Link>
+        {navLink("/admin/leads", isLeads, <ListChecks size={16} aria-hidden="true" />, "Leads")}
+        {navLink("/admin/settings", isSettings, <Settings size={16} aria-hidden="true" />, "Settings")}
       </nav>
 
       <div className="p-4 border-t border-[var(--surface-3)]">

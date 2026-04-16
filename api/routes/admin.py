@@ -2,6 +2,8 @@
 
 Shape:
     POST  /admin/auth/verify          — public; rate-limited bcrypt compare
+    POST  /admin/auth/change-password — any analyst can change their own password
+    POST  /admin/analysts             — superadmin creates a new analyst
     GET   /admin/leads                — paginated list, filters + search
     GET   /admin/leads/{id}           — full detail + review history
     POST  /admin/leads/{id}/review    — approve/reject (append-only)
@@ -24,8 +26,18 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from api.auth import AnalystId, ServiceToken, authenticate_analyst
+from api.auth import (
+    AnalystId,
+    ServiceToken,
+    SuperadminId,
+    authenticate_analyst,
+    hash_password,
+    verify_password,
+)
 from api.schemas.admin import (
+    ChangePasswordRequest,
+    CreateAnalystRequest,
+    CreateAnalystResponse,
     EmailBackfillRequest,
     LeadDetail,
     LeadReviewOut,
@@ -43,6 +55,7 @@ from api.schemas.admin import (
     project_key_metrics,
 )
 from pipeline.db import session_scope
+from pipeline.models.analyst import Analyst
 from pipeline.models.event import Event
 from pipeline.models.lead import Lead, LeadStatus
 from pipeline.models.review import (
@@ -68,7 +81,83 @@ def verify_credentials(body: VerifyRequest) -> VerifyResponse:
     own rate limiter and its own generic 401 body.
     """
     analyst = authenticate_analyst(body.username, body.password)
-    return VerifyResponse(analyst_id=analyst.id, username=analyst.username)
+    return VerifyResponse(
+        analyst_id=analyst.id,
+        username=analyst.username,
+        is_superadmin=analyst.is_superadmin,
+    )
+
+
+# ── /auth/change-password ───────────────────────────────────────────────────
+@router.post("/auth/change-password", response_model=ReviewedOut)
+def change_password(
+    body: ChangePasswordRequest,
+    _: ServiceToken,
+    analyst_id: AnalystId,
+) -> ReviewedOut:
+    """Any analyst can change their own password."""
+    session: Session = session_scope()
+    try:
+        analyst = session.scalar(
+            select(Analyst).where(Analyst.id == analyst_id, Analyst.active.is_(True))
+        )
+        if analyst is None:
+            raise HTTPException(status_code=404, detail="Analyst not found")
+
+        if not verify_password(body.current_password, analyst.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Current password is incorrect",
+            )
+
+        analyst.password_hash = hash_password(body.new_password)
+        session.commit()
+        log.info("password_changed", analyst_id=str(analyst_id))
+        return ReviewedOut(id=analyst_id)
+    finally:
+        session.close()
+
+
+# ── /analysts (POST, superadmin only) ───────────────────────────────────────
+@router.post(
+    "/analysts",
+    response_model=CreateAnalystResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_analyst(
+    body: CreateAnalystRequest,
+    _: ServiceToken,
+    __: SuperadminId,
+) -> CreateAnalystResponse:
+    """Only superadmins can create new analyst accounts."""
+    session: Session = session_scope()
+    try:
+        existing = session.scalar(
+            select(Analyst).where(Analyst.username == body.username)
+        )
+        if existing is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Analyst '{body.username}' already exists",
+            )
+
+        analyst = Analyst(
+            id=uuid.uuid4(),
+            username=body.username,
+            password_hash=hash_password(body.password),
+            active=True,
+            is_superadmin=False,
+        )
+        session.add(analyst)
+        session.commit()
+        log.info(
+            "analyst_created",
+            new_analyst_id=str(analyst.id),
+            new_username=body.username,
+        )
+        return CreateAnalystResponse(analyst_id=analyst.id, username=analyst.username)
+    finally:
+        session.close()
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────

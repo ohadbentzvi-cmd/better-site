@@ -13,6 +13,7 @@ const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 export interface AdminSession {
   analyst_id: string;
   username: string;
+  is_superadmin: boolean;
   exp?: number;
 }
 
@@ -29,6 +30,7 @@ function getSecretKey(): Uint8Array {
 export async function signSession(payload: {
   analyst_id: string;
   username: string;
+  is_superadmin: boolean;
 }): Promise<string> {
   return await new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
@@ -51,6 +53,7 @@ export async function verifySession(token: string): Promise<AdminSession | null>
     return {
       analyst_id: payload.analyst_id,
       username: payload.username,
+      is_superadmin: payload.is_superadmin === true,
       exp: typeof payload.exp === "number" ? payload.exp : undefined,
     };
   } catch {

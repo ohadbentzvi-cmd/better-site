@@ -31,6 +31,7 @@ class VerifyRequest(BaseModel):
 class VerifyResponse(BaseModel):
     analyst_id: uuid.UUID
     username: str
+    is_superadmin: bool
 
 
 class ScanSummary(BaseModel):
@@ -165,3 +166,18 @@ class ReviewedOut(BaseModel):
 
     ok: Literal[True] = True
     id: uuid.UUID
+
+
+class CreateAnalystRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")
+    password: str = Field(min_length=8, max_length=512)
+
+
+class CreateAnalystResponse(BaseModel):
+    analyst_id: uuid.UUID
+    username: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=512)
