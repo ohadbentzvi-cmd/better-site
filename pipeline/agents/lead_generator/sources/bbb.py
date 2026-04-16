@@ -86,6 +86,10 @@ class BBBBlockedError(BBBError):
     """403 from BBB — batch should halt, not be silently retried."""
 
 
+class BBBNotFoundError(BBBError):
+    """404 from BBB — stale profile/search URL. Skip the row, log, continue."""
+
+
 class BBBParseError(BBBError):
     """Unexpected HTML structure. Skip the row, log, continue."""
 
@@ -195,6 +199,12 @@ class BBBSource:
                     except BBBBlockedError:
                         log.error("bbb.profile.blocked", profile_url=stub.profile_url)
                         raise
+                    except BBBNotFoundError:
+                        log.warning(
+                            "bbb.profile.not_found",
+                            profile_url=stub.profile_url,
+                        )
+                        continue
                     except BBBParseError as e:
                         log.warning(
                             "bbb.profile.parse_error",
@@ -255,6 +265,8 @@ async def _get_with_retries(client: httpx.AsyncClient, url: str) -> httpx.Respon
                 raise BBBRateLimitError(f"429 on {url}")
             if response.status_code == 403:
                 raise BBBBlockedError(f"403 on {url}")
+            if response.status_code == 404:
+                raise BBBNotFoundError(f"404 on {url}")
             response.raise_for_status()
             return response
     raise BBBError(f"unreachable — retry exhausted for {url}")
