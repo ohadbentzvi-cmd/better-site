@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { QuickActions } from "./quick-actions";
 import { ScoreBar } from "./score-bar";
 
 interface LeadRow {
@@ -69,6 +70,9 @@ export function LeadsTable({ rows }: LeadsTableProps) {
             <th scope="col" className="text-left font-medium px-4 py-2">
               Last reviewed
             </th>
+            <th scope="col" className="text-right font-medium px-4 py-2">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -129,6 +133,26 @@ export function LeadsTable({ rows }: LeadsTableProps) {
                   </>
                 ) : (
                   "—"
+                )}
+              </td>
+              <td className="px-4 py-2.5 text-right">
+                {row.latest_review ? (
+                  <span
+                    className={`text-xs font-medium ${
+                      row.latest_review.verdict === "approved"
+                        ? "text-[var(--success)]"
+                        : "text-[var(--danger)]"
+                    }`}
+                  >
+                    {row.latest_review.verdict === "approved"
+                      ? "Approved"
+                      : "Rejected"}
+                  </span>
+                ) : (
+                  <QuickActions
+                    leadId={row.id}
+                    businessName={row.business_name}
+                  />
                 )}
               </td>
             </tr>

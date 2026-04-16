@@ -68,3 +68,4 @@ playwright/.cache/
 tmp/
 scratch/
 *.local
+.env.bak
