@@ -88,14 +88,24 @@ export function FilterBar() {
         <option value="false">No email</option>
       </Select>
       <Select
-        defaultValue={sp.get("score_min") ?? ""}
-        onChange={(e) => applyFilter({ score_min: e.target.value || null })}
-        aria-label="Minimum score"
+        defaultValue={activeScoreKey(sp)}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (!v) applyFilter({ score_min: null, score_max: null });
+          else if (v.startsWith("min:"))
+            applyFilter({ score_min: v.slice(4), score_max: null });
+          else if (v.startsWith("max:"))
+            applyFilter({ score_min: null, score_max: v.slice(4) });
+        }}
+        aria-label="Score filter"
       >
         <option value="">Score: any</option>
-        <option value="60">≥ 60 (pass)</option>
-        <option value="80">≥ 80</option>
-        <option value="40">≥ 40</option>
+        <option value="min:80">≥ 80</option>
+        <option value="min:60">≥ 60 (pass)</option>
+        <option value="min:40">≥ 40</option>
+        <option value="max:60">≤ 60 (below pass)</option>
+        <option value="max:40">≤ 40</option>
+        <option value="max:20">≤ 20</option>
       </Select>
       <Button type="submit" variant="ghost" loading={pending}>
         Apply
@@ -115,4 +125,13 @@ function hasActiveFilter(sp: URLSearchParams): boolean {
     if (key !== "cursor") return true;
   }
   return false;
+}
+
+/** Derive the <select> value from the current search params. */
+function activeScoreKey(sp: URLSearchParams): string {
+  const min = sp.get("score_min");
+  const max = sp.get("score_max");
+  if (min) return `min:${min}`;
+  if (max) return `max:${max}`;
+  return "";
 }

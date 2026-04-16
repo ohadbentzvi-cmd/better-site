@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ListChecks, LogOut, Settings } from "lucide-react";
@@ -36,11 +37,16 @@ export function Sidebar({ username }: SidebarProps) {
       className="flex flex-col w-[220px] shrink-0 h-screen sticky top-0 bg-[var(--surface-1)] border-r border-[var(--surface-3)]"
       aria-label="Admin navigation"
     >
-      <div className="px-4 py-5 border-b border-[var(--surface-3)]">
-        <div className="text-sm font-semibold text-[var(--text-primary)]">
-          BetterSite
-        </div>
-        <div className="text-xs text-[var(--text-secondary)] mt-0.5">Admin</div>
+      <div className="px-4 py-4 border-b border-[var(--surface-3)]">
+        <Image
+          src="/logo.png"
+          alt="BetterSite"
+          width={140}
+          height={32}
+          priority
+          className="h-8 w-auto"
+        />
+        <div className="text-xs text-[var(--text-secondary)] mt-1">Admin</div>
       </div>
 
       <nav className="flex-1 py-2">

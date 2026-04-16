@@ -1,9 +1,13 @@
 import { AlertCircle, AlertTriangle, Info } from "lucide-react";
 
 interface Issue {
+  category?: string;
+  severity?: string;
+  smb_message?: string;
+  technical_detail?: string;
+  /** Legacy fields for forward-compat. */
   title?: string;
   message?: string;
-  severity?: string;
   dimension?: string;
   [key: string]: unknown;
 }
@@ -57,11 +61,16 @@ export function IssueList({ issues }: IssueListProps) {
           {severityIcon(issue.severity)}
           <div className="min-w-0">
             <div className="text-[var(--text-primary)]">
-              {issue.title || issue.message || "Issue"}
+              {issue.smb_message || issue.title || issue.message || "Issue"}
             </div>
-            {issue.dimension ? (
+            {issue.technical_detail ? (
+              <div className="text-xs text-[var(--text-tertiary)] mt-0.5 font-mono">
+                {issue.technical_detail}
+              </div>
+            ) : null}
+            {(issue.category || issue.dimension) ? (
               <div className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                {issue.dimension}
+                {issue.category || issue.dimension}
                 {issue.severity ? ` · ${issue.severity}` : ""}
               </div>
             ) : null}
