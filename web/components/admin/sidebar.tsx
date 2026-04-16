@@ -41,10 +41,10 @@ export function Sidebar({ username }: SidebarProps) {
         <Image
           src="/logo.png"
           alt="BetterSite"
-          width={140}
-          height={32}
+          width={200}
+          height={48}
           priority
-          className="h-8 w-auto"
+          className="h-12 w-auto"
         />
         <div className="text-xs text-[var(--text-secondary)] mt-1">Admin</div>
       </div>
