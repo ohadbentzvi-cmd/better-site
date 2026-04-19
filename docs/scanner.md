@@ -42,7 +42,7 @@ How the Scanner works and how to add new inputs or scoring rules.
  ┌────────────────────────────────────────────────────────────┐
  │  if target.lead_id:                                         │
  │     UPSERT ops.scans (ON CONFLICT lead_id DO UPDATE)        │
- │  create per-URL markdown artifact (scaled screenshots)      │
+ │  create per-URL markdown artifact (scores + findings)       │
  │  at end-of-run: create site-scan-summary artifact           │
  └────────────────────────────────────────────────────────────┘
 ```
@@ -165,7 +165,7 @@ Scan results UPSERT into `ops.scans` keyed on `lead_id`. Columns used by this ag
 | `raw_metrics` | JSONB: LCP, CLS, TBT, FCP, TTFB, page_weight, speed_index, etc. |
 | `issues_json` | JSONB array of `Finding` dicts (SMB message + technical detail + severity). |
 | `has_ssl`, `has_mobile`, `has_analytics` | Legacy booleans for admin UI. |
-| `screenshot_r2_key` | Unused in Phase 2.5. Screenshots live in the Prefect artifact only. |
+| `screenshot_r2_key` | Unused in Phase 2.5. Screenshots are captured during the scan for DOM/layout signals but not persisted anywhere. |
 
 ---
 
@@ -173,7 +173,7 @@ Scan results UPSERT into `ops.scans` keyed on `lead_id`. Columns used by this ag
 
 Every run produces:
 
-- **Per-URL markdown artifact** (one per scanned URL) — score table, findings sorted by severity, raw metrics block, scaled desktop + mobile screenshots (max 800px wide, JPEG q=80). Scaled in the flow so Prefect's UI renders quickly.
+- **Per-URL markdown artifact** (one per scanned URL) — score table, findings sorted by severity, raw metrics block. Screenshots are captured during the scan but intentionally not embedded in the artifact — at 1000+ sites per run, base64-embedded images would balloon artifact size and hold multi-MB PNGs in memory for the whole batch.
 - **Run summary artifact** (`site-scan-summary`, one per run) — target mode, duration, distribution of overall scores across `{0-40, 40-70, 70-100, unknown}` buckets, top 5 most-common findings across the batch.
 
 ---

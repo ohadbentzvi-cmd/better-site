@@ -184,10 +184,6 @@ class ScanResult(BaseModel):
     raw_metrics: dict[str, Any] = Field(default_factory=dict)
     findings: list[Finding] = Field(default_factory=list)
 
-    # Screenshots stay in-memory for the Prefect artifact; not persisted.
-    desktop_screenshot_png: bytes | None = None
-    mobile_screenshot_png: bytes | None = None
-
     model_config = {"arbitrary_types_allowed": True}
 
 

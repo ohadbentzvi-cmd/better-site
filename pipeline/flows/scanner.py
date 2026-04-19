@@ -8,15 +8,13 @@ Two input modes:
 - Leads-table mode: ``urls=None`` (default). Pulls the next ``limit``
   unscanned leads from ``ops.leads`` and scans them.
 
-Each URL produces a markdown artifact with scores + findings + scaled
-screenshots. A final run-summary artifact aggregates the batch.
+Each URL produces a markdown artifact with scores + findings. A final
+run-summary artifact aggregates the batch.
 """
 
 from __future__ import annotations
 
 import asyncio
-import base64
-import io
 from datetime import datetime, timezone
 
 import structlog
@@ -29,10 +27,6 @@ from pipeline.agents.scanner.targets import LeadTableTarget, UrlListTarget
 from pipeline.observability import configure as configure_logging
 
 log = structlog.get_logger(__name__)
-
-# Keep artifact screenshots small so Prefect UI renders quickly.
-ARTIFACT_SCREENSHOT_MAX_WIDTH = 800
-ARTIFACT_SCREENSHOT_JPEG_QUALITY = 80
 
 
 @flow(name="site-scan")
@@ -97,9 +91,6 @@ def _per_url_markdown(r: ScanResult) -> str:
         f"| {label} | {'—' if v is None else v} |" for label, v in dim_rows
     )
     findings_md = _findings_markdown(r.findings)
-    screenshots_md = _screenshots_markdown(
-        r.desktop_screenshot_png, r.mobile_screenshot_png
-    )
     overall = "—" if r.overall is None else str(r.overall)
     partial_note = "\n\n> ⚠️ Partial scan — at least one dimension was unmeasurable." if r.scan_partial else ""
     return f"""\
@@ -122,10 +113,6 @@ def _per_url_markdown(r: ScanResult) -> str:
 ```
 {_raw_metrics_block(r)}
 ```
-
-## Screenshots
-
-{screenshots_md}
 """
 
 
@@ -154,46 +141,6 @@ def _raw_metrics_block(r: ScanResult) -> str:
         else:
             items.append(f"{k}: {v}")
     return "\n".join(items) if items else "(no metrics captured)"
-
-
-def _screenshots_markdown(desktop: bytes | None, mobile: bytes | None) -> str:
-    chunks: list[str] = []
-    desktop_src = _scaled_data_url(desktop)
-    if desktop_src:
-        chunks.append(f"### Desktop (1280×900, scaled)\n\n![desktop]({desktop_src})")
-    mobile_src = _scaled_data_url(mobile)
-    if mobile_src:
-        chunks.append(f"### Mobile (375×812, scaled)\n\n![mobile]({mobile_src})")
-    return "\n\n".join(chunks) if chunks else "_(no screenshots captured)_"
-
-
-def _scaled_data_url(png: bytes | None) -> str | None:
-    if not png:
-        return None
-    try:
-        from PIL import Image  # local import — Pillow is already in requirements
-    except ImportError:
-        log.warning("scanner.artifact.pillow_missing")
-        return None
-    try:
-        img = Image.open(io.BytesIO(png))
-        img.load()
-        if img.width > ARTIFACT_SCREENSHOT_MAX_WIDTH:
-            ratio = ARTIFACT_SCREENSHOT_MAX_WIDTH / img.width
-            new_size = (
-                ARTIFACT_SCREENSHOT_MAX_WIDTH,
-                int(img.height * ratio),
-            )
-            img = img.resize(new_size)
-        if img.mode not in ("RGB", "L"):
-            img = img.convert("RGB")
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=ARTIFACT_SCREENSHOT_JPEG_QUALITY, optimize=True)
-        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-        return f"data:image/jpeg;base64,{b64}"
-    except Exception as e:  # noqa: BLE001 — artifact rendering is best-effort
-        log.warning("scanner.artifact.scale_failed", error=str(e))
-        return None
 
 
 def _run_summary_markdown(

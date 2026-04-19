@@ -138,8 +138,6 @@ async def scan_url(url: str) -> ScanResult | None:
         has_analytics=False,  # unused in v1; placeholder for future analytics detection
         raw_metrics=scored["raw_metrics"],
         findings=scored["findings"],
-        desktop_screenshot_png=browser_result.desktop_screenshot_png,
-        mobile_screenshot_png=browser_result.mobile_screenshot_png,
     )
     log.info(
         "scanner.scan_complete",
