@@ -20,7 +20,7 @@ class GmbFirstStrategy(ExtractionStrategy):
         self,
         url: str,
         html: str,
-        screenshot_path: str,
+        screenshot_png: bytes,
     ) -> ExtractionResult:
         # TODO: implement in Phase 3
         # 1. Google Places API lookup by canonical_domain or business_name + city

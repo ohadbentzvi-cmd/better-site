@@ -20,7 +20,7 @@ class HybridStrategy(ExtractionStrategy):
         self,
         url: str,
         html: str,
-        screenshot_path: str,
+        screenshot_png: bytes,
     ) -> ExtractionResult:
         # TODO: implement in Phase 3
         # 1. Run HtmlOnlyStrategy-equivalent logic

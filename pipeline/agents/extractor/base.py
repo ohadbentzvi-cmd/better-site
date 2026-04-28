@@ -12,42 +12,67 @@ Adding a new strategy:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+
+from pydantic import BaseModel, Field
 
 
-@dataclass(frozen=True)
-class ExtractionResult:
+class ServiceBlurb(BaseModel):
+    """One service offered by the business."""
+
+    name: str
+    blurb: str | None = None
+
+
+class Testimonial(BaseModel):
+    """A single customer testimonial."""
+
+    quote: str
+    author: str | None = None
+    source: str | None = None
+
+
+class ExtractionResult(BaseModel):
     """Structured output from any ExtractionStrategy.
 
     The Builder maps this into the vertical template's ``content.schema.json``.
-    Missing fields use ``None`` — the template is responsible for graceful
-    degradation (text wordmark, stock hero, template default colors).
+    Missing fields use ``None`` / empty collections — the template is
+    responsible for graceful degradation (text wordmark, stock hero,
+    template default colors).
     """
 
     # Identity
     business_name: str | None = None
     tagline: str | None = None
+    cta_text: str | None = None
+
+    # Trust
+    years_in_business: int | None = None
+    license_numbers: list[str] = Field(default_factory=list)
 
     # Contact
     phone: str | None = None
     email: str | None = None
     address: str | None = None
+    hours: dict[str, str] = Field(default_factory=dict)
 
     # Copy
     about: str | None = None
-    services: list[str] = field(default_factory=list)
+    services: list[ServiceBlurb] = Field(default_factory=list)
+    service_areas: list[str] = Field(default_factory=list)
+    testimonials: list[Testimonial] = Field(default_factory=list)
 
     # Social
-    social_links: dict[str, str] = field(default_factory=dict)
+    social_links: dict[str, str] = Field(default_factory=dict)
 
     # Visual assets — R2 keys, not raw bytes
     logo_r2_key: str | None = None
     hero_r2_key: str | None = None
-    brand_colors: list[str] = field(default_factory=list)  # hex strings
+    brand_colors: list[str] = Field(default_factory=list)
 
     # Provenance
     strategy_name: str = ""
     vision_model_version: str | None = None
+    prompt_version: str | None = None
     cost_usd: float = 0.0
 
 
@@ -61,12 +86,15 @@ class ExtractionStrategy(ABC):
         self,
         url: str,
         html: str,
-        screenshot_path: str,
+        screenshot_png: bytes,
     ) -> ExtractionResult:
         """Produce an ExtractionResult from the given site inputs.
 
         Inputs are pre-fetched by the Extractor flow so every strategy sees
         identical raw materials — that makes the manual comparison fair.
+
+        ``screenshot_png`` is the desktop full-page screenshot bytes;
+        strategies that need a tempfile should write it themselves.
 
         Raises:
             ExtractionStrategyError: on any recoverable failure; the Extractor

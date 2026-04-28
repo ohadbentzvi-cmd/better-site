@@ -29,6 +29,7 @@ from prefect import serve  # noqa: E402
 from pipeline.flows.lead_generator import generate_leads  # noqa: E402
 from pipeline.flows.lead_generator_batch import generate_leads_batch  # noqa: E402
 from pipeline.flows.scanner import scan_sites  # noqa: E402
+from pipeline.flows.website_extractor import extract_websites  # noqa: E402
 from pipeline.observability import configure as configure_logging  # noqa: E402
 
 
@@ -61,7 +62,12 @@ def main() -> None:
         parameters={"urls": None, "limit": 50},
     )
 
-    serve(lead_generation, lead_generation_batch, site_scan)
+    website_extractor = extract_websites.to_deployment(
+        name="website-extractor",
+        parameters={"lead_ids": None, "limit": 50},
+    )
+
+    serve(lead_generation, lead_generation_batch, site_scan, website_extractor)
 
 
 if __name__ == "__main__":

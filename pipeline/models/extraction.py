@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import Float, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -42,6 +42,14 @@ class Extraction(Base, TimestampMixin):
 
     # Version of the vision model used, if any
     vision_model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # Version tag of the prompt that produced this extraction; lets us filter
+    # rows for prompt iteration without re-running a whole batch.
+    prompt_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # USD cost summed for this row's LLM calls (0.0 for purely deterministic
+    # strategies). Source-of-truth for the per-batch cost ceiling.
+    cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
     lead: Mapped["Lead"] = relationship(back_populates="extraction")
 

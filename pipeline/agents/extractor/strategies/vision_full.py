@@ -22,7 +22,7 @@ class VisionFullStrategy(ExtractionStrategy):
         self,
         url: str,
         html: str,
-        screenshot_path: str,
+        screenshot_png: bytes,
     ) -> ExtractionResult:
         # TODO: implement in Phase 3
         # - BeautifulSoup parse for text fields
