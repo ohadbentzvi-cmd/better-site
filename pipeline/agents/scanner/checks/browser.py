@@ -7,6 +7,10 @@ desktop + mobile screenshots.
 Playwright/Chromium crashes are caught and turned into
 ``BrowserCheckResult(available=False, error_reason=...)`` so scoring can
 degrade gracefully — we never let one bad site kill a whole run.
+
+Browser launch + navigation come from :mod:`pipeline.utils.browser`. The
+scanner-specific work (``page.evaluate`` JS for visibility / computed-style
+signals static HTML can't provide) lives here.
 """
 
 from __future__ import annotations
@@ -18,28 +22,18 @@ import structlog
 from playwright.async_api import (
     Browser,
     Playwright,
-    TimeoutError as PlaywrightTimeoutError,
     async_playwright,
 )
 
 from pipeline.agents.scanner.base import BrowserCheckResult
+from pipeline.utils.browser import (
+    DESKTOP_VIEWPORT,
+    MOBILE_VIEWPORT,
+    BrowserFetchError,
+    navigate_safely,
+)
 
 log = structlog.get_logger(__name__)
-
-DESKTOP_VIEWPORT = {"width": 1280, "height": 900}
-MOBILE_VIEWPORT = {"width": 375, "height": 812}
-
-# Nav strategy:
-#   - Primary: wait for the ``load`` event (all initial resources done).
-#     Unlike ``networkidle``, this is NOT blocked by long-polling analytics,
-#     live-chat widgets, or ads that keep the network busy forever.
-#   - Fallback on timeout: ``domcontentloaded`` (DOM parsed, before images /
-#     CSS finish) so we still get DOM + a screenshot on pathological sites.
-#   - Best-effort short ``networkidle`` wait after load to let late images
-#     paint into the screenshot. Swallows its own timeout.
-NAV_TIMEOUT_MS = 30_000
-FALLBACK_NAV_TIMEOUT_MS = 15_000
-POST_LOAD_SETTLE_MS = 3_000
 
 # "Above the fold" threshold for desktop. 900px mirrors viewport height;
 # elements with bounding box top < this are visible on first paint.
@@ -55,7 +49,7 @@ async def fetch_browser_data(url: str) -> BrowserCheckResult:
                 return await _extract(pw, browser, url)
             finally:
                 await browser.close()
-    except PlaywrightTimeoutError as e:
+    except BrowserFetchError as e:
         log.warning("browser.timeout", url=url, error=str(e))
         return BrowserCheckResult(available=False, error_reason=f"timeout: {e}")
     except Exception as e:  # noqa: BLE001 — Playwright surfaces many types
@@ -68,25 +62,28 @@ async def _extract(
 ) -> BrowserCheckResult:
     # ── Desktop pass: screenshot + DOM extraction ───────────────────────────
     desktop_context = await browser.new_context(viewport=DESKTOP_VIEWPORT)
-    desktop_page = await desktop_context.new_page()
-    await _navigate_safely(desktop_page, url)
-    desktop_shot = await desktop_page.screenshot(full_page=True, type="png")
+    try:
+        desktop_page = await desktop_context.new_page()
+        await navigate_safely(desktop_page, url)
+        desktop_shot = await desktop_page.screenshot(full_page=True, type="png")
 
-    title = await desktop_page.title()
-    meta = await _extract_meta(desktop_page)
-    headings = await _extract_headings(desktop_page)
-    images = await _extract_image_alts(desktop_page)
-    json_ld_types = await _extract_json_ld_types(desktop_page)
-    conversion = await _extract_conversion_signals(desktop_page)
-
-    await desktop_context.close()
+        title = await desktop_page.title()
+        meta = await _extract_meta(desktop_page)
+        headings = await _extract_headings(desktop_page)
+        images = await _extract_image_alts(desktop_page)
+        json_ld_types = await _extract_json_ld_types(desktop_page)
+        conversion = await _extract_conversion_signals(desktop_page)
+    finally:
+        await desktop_context.close()
 
     # ── Mobile pass: screenshot only. Viewport meta is DOM, already captured.
     mobile_context = await browser.new_context(viewport=MOBILE_VIEWPORT)
-    mobile_page = await mobile_context.new_page()
-    await _navigate_safely(mobile_page, url)
-    mobile_shot = await mobile_page.screenshot(full_page=True, type="png")
-    await mobile_context.close()
+    try:
+        mobile_page = await mobile_context.new_page()
+        await navigate_safely(mobile_page, url)
+        mobile_shot = await mobile_page.screenshot(full_page=True, type="png")
+    finally:
+        await mobile_context.close()
 
     return BrowserCheckResult(
         title=title or None,
@@ -114,33 +111,6 @@ async def _extract(
         desktop_screenshot_png=desktop_shot,
         mobile_screenshot_png=mobile_shot,
     )
-
-
-async def _navigate_safely(page: Any, url: str) -> None:
-    """Two-tier ``page.goto`` with best-effort settle.
-
-    Primary: wait for ``load`` — NOT blocked by analytics/chat widgets
-    that keep ``networkidle`` permanently busy.
-    Fallback: ``domcontentloaded`` so we still get DOM + screenshot on
-    pathological sites (badly-served CSS, hung third-party script, etc.).
-    Settle: short best-effort ``networkidle`` wait so late images make
-    it into the screenshot. Swallows its own timeout.
-    """
-    try:
-        await page.goto(url, wait_until="load", timeout=NAV_TIMEOUT_MS)
-    except PlaywrightTimeoutError as e:
-        log.info(
-            "browser.goto_load_timeout_fallback_domcontentloaded",
-            url=url,
-            error=str(e),
-        )
-        await page.goto(url, wait_until="domcontentloaded", timeout=FALLBACK_NAV_TIMEOUT_MS)
-
-    try:
-        await page.wait_for_load_state("networkidle", timeout=POST_LOAD_SETTLE_MS)
-    except PlaywrightTimeoutError:
-        # Expected on sites with ongoing analytics. Not an error.
-        pass
 
 
 async def _extract_meta(page: Any) -> dict[str, str]:
